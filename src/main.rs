@@ -1,7 +1,8 @@
 mod drone;
 mod messages;
 use crossbeam::channel::unbounded;
-use messages::{Fragment, Packet, PacketType};
+use crossbeam::epoch::Pointable;
+use messages::{Fragment, Packet, PacketType, SourceRoutingHeader, Ack, Nack};
 use std::thread;
 use std::time::Duration;
 
@@ -15,10 +16,14 @@ fn main() {
 
 
     loop {
-        // let s = String::from("hiiii");
-        // s1.send(s).unwrap();
-        // thread::sleep(Duration::from_secs(2));
-        // let s = String::from("byeee");
-        // s2.send(s).unwrap();
+        let packet = Packet::new(PacketType::MsgFragment(Fragment::default()),SourceRoutingHeader::default(),0);
+        s1.send(packet).unwrap();
+        thread::sleep(Duration::from_secs(2));
+        let packet = Packet::new(PacketType::Ack(Ack::default()),SourceRoutingHeader::default(),0);
+        s1.send(packet).unwrap();
+        thread::sleep(Duration::from_secs(2));
+        let packet = Packet::new(PacketType::Nack(Nack::default()),SourceRoutingHeader::default(),0);
+        s1.send(packet).unwrap();
+        thread::sleep(Duration::from_secs(2));
     }
 }
