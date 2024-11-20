@@ -46,22 +46,34 @@ pub struct FragmentData {
 }
 
 pub struct Packet {
-    pub pack_type: PacketType,
-    pub routing_header: SourceRoutingHeader,
-    pusession_id: u64,
+	pub pack_type: PacketType,
+	pub routing_header: SourceRoutingHeader,
+	pub session_id: u64,
 }
 
 impl Packet {
     pub fn new(
         pack_type: PacketType,
         routing_header: SourceRoutingHeader,
-        pusession_id: u64,
+        session_id: u64,
     ) -> Packet {
         Packet {
             pack_type,
             routing_header,
-            pusession_id,
+            session_id,
         }
+    }
+    
+    pub fn get_pack_type(&self)->&PacketType{
+        &self.pack_type
+    }
+    
+    pub fn get_routing_header(&self)->SourceRoutingHeader{
+        self.routing_header.clone()
+    }
+    
+    pub fn get_session_id(&self)->u64{
+        self.session_id
     }
 }
 

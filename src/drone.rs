@@ -1,6 +1,6 @@
 use std::collections::{HashMap};
-
 use super::messages::*;
+use crate::log_debug;
 use crossbeam::channel::{select, Receiver, Sender};
 
 pub struct Drone {
@@ -28,22 +28,22 @@ impl Drone {
         }
     }
 
-    fn drone_packet_dispatcher(&self, packet: Packet) {
+    fn packet_dispatcher(&self, packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
-                println!("Drone {} received a fragment", self.id);
-                
+                log_debug!("Drone {} received a fragment", self.id);
+                // self.fragment_handler(fragment, packet.routing_header, packet.session_id);             
             }
             PacketType::Nack(nack) => {
-                println!("Drone {} received nack", self.id);
+                log_debug!("Drone {} received nack", self.id);
             }
             PacketType::Ack(ack) => {
-                println!("Drone {} received ack", self.id);
+                log_debug!("Drone {} received ack", self.id);
             }
         }
     }
 
-    fn drone_fragment_handler(
+    fn fragment_handler(
         &mut self,
         fragment: Fragment,
         mut source_routing_header: SourceRoutingHeader,
@@ -55,12 +55,12 @@ impl Drone {
                     source_routing_header.increment_index();
                     match source_routing_header.get_next_hop() {
                         None => {
-                            println!("Drone {} received fragment and it is at the edge", self.id);
+                            log_debug!("Drone {} received fragment and it is at the edge", self.id);
                         },
                         Some(next_node) => {
                             match self.senders.get(&next_node) {
                                 None => {
-                                    println!("Drone {} received fragment and can't forward", self.id);
+                                    log_debug!("Drone {} received fragment and can't forward", self.id);
                                 },
                                 Some(sender) => {
                                     let packet = Packet::new(PacketType::MsgFragment(fragment), source_routing_header, pusession_id);
@@ -71,11 +71,11 @@ impl Drone {
                     }
                     
                 } else {
-                    println!("Drone {} received wrong fragment", self.id);
+                    log_debug!("Drone {} received wrong fragment", self.id);
                 }
             }
             None => {
-                println!("Drone {} received wrong fragment", self.id);
+                log_debug!("Drone {} received wrong fragment", self.id);
             }
         }
     }
@@ -85,18 +85,18 @@ impl Drone {
             select! {
                 recv(self.receiver) -> msg => {
                     match msg {
-                        Ok(msg) => self.drone_packet_dispatcher(msg),
+                        Ok(msg) => self.packet_dispatcher(msg),
                         Err(_) => {
-                            println!("Drone {} receiver disconnected", self.id);
+                            log_debug!("Drone {} receiver disconnected", self.id);
                             break;
                         }
                     }
                 }
                 recv(self.controller_receiver) -> msg => {
                     if let Ok(msg) = msg {
-                        println!("Drone {} received message from controller", self.id);
+                        log_debug!("Drone {} received message from controller", self.id);
                     } else {
-                        println!("Drone {} controller receiver disconnected", self.id);
+                        log_debug!("Drone {} controller receiver disconnected", self.id);
                         break;
                     }
                 }
