@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 crossbeam = "0.8.4"
+wg_internal = { path = "../WGL_repo_2024/crates/wg_internal" }
 
 [lib]
 name = "drone"

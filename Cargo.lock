@@ -63,4 +63,50 @@ name = "drone"
 version = "0.1.0"
 dependencies = [
  "crossbeam",
+ "wg_internal",
+]
+
+[[package]]
+name = "wg_config"
+version = "0.1.0"
+
+[[package]]
+name = "wg_controller"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "wg_network",
+ "wg_packet",
+]
+
+[[package]]
+name = "wg_drone"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "wg_controller",
+ "wg_network",
+ "wg_packet",
+]
+
+[[package]]
+name = "wg_internal"
+version = "0.1.0"
+dependencies = [
+ "wg_config",
+ "wg_controller",
+ "wg_drone",
+ "wg_network",
+ "wg_packet",
+]
+
+[[package]]
+name = "wg_network"
+version = "0.1.0"
+
+[[package]]
+name = "wg_packet"
+version = "0.1.0"
+dependencies = [
+ "wg_network",
 ]
