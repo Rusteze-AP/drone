@@ -1,16 +1,15 @@
-use std::collections::{HashMap};
 use crate::log_debug;
 use crate::messages::RustezePacket;
 use crate::messages::RustezeSourceRoutingHeader;
 use crossbeam::channel::{select, Receiver, Sender};
+use std::collections::HashMap;
 use wg_internal::controller::Command;
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::NodeId;
+use wg_internal::network::SourceRoutingHeader;
+use wg_internal::packet::Fragment;
 use wg_internal::packet::Packet;
 use wg_internal::packet::PacketType;
-use wg_internal::packet::Fragment;
-use wg_internal::network::SourceRoutingHeader;
-
 
 pub struct RustezeDrone {
     id: NodeId,
@@ -20,39 +19,28 @@ pub struct RustezeDrone {
     controller_sender: Sender<Command>,
 }
 
-impl Drone for RustezeDrone{
+impl Drone for RustezeDrone {
     fn new(options: DroneOptions) -> Self {
-        Self { id: options.id, receiver: options.packet_recv, senders: HashMap::new(), controller_receiver: options.sim_contr_recv, controller_sender: options.sim_contr_send }
+        Self {
+            id: options.id,
+            receiver: options.packet_recv,
+            senders: HashMap::new(),
+            controller_receiver: options.sim_contr_recv,
+            controller_sender: options.sim_contr_send,
+        }
     }
-    
+
     fn run(&mut self) {
         self.internal_run();
     }
 }
 
-
 impl RustezeDrone {
-    pub fn new(
-        id: NodeId,
-        receiver: Receiver<Packet>,
-        controller_receiver: Receiver<Command>,
-        senders: HashMap<NodeId, Sender<Packet>>,
-        controller_sender: Sender<Command>,
-    ) -> Self {
-        Self {
-            id,
-            receiver,
-            senders,
-            controller_receiver,
-            controller_sender,
-        }
-    }
-
     fn packet_dispatcher(&mut self, packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
                 log_debug!("Drone {} received a fragment", self.id);
-                self.fragment_handler(fragment, packet.routing_header, packet.session_id);             
+                self.fragment_handler(fragment, packet.routing_header, packet.session_id);
             }
             PacketType::Nack(nack) => {
                 log_debug!("Drone {} received nack", self.id);
@@ -76,20 +64,21 @@ impl RustezeDrone {
                     match source_routing_header.get_next_hop() {
                         None => {
                             log_debug!("Drone {} received fragment and it is at the edge", self.id);
-                        },
-                        Some(next_node) => {
-                            match self.senders.get(&next_node) {
-                                None => {
-                                    log_debug!("Drone {} received fragment and can't forward", self.id);
-                                },
-                                Some(sender) => {
-                                    let packet = Packet::new(PacketType::MsgFragment(fragment), Box::new(source_routing_header), pusession_id);
-                                    sender.send(packet).unwrap();
-                                }
-                            }
                         }
+                        Some(next_node) => match self.senders.get(&next_node) {
+                            None => {
+                                log_debug!("Drone {} received fragment and can't forward", self.id);
+                            }
+                            Some(sender) => {
+                                let packet = Packet::new(
+                                    PacketType::MsgFragment(fragment),
+                                    Box::new(source_routing_header),
+                                    pusession_id,
+                                );
+                                sender.send(packet).unwrap();
+                            }
+                        },
                     }
-                    
                 } else {
                     log_debug!("Drone {} received wrong fragment", self.id);
                 }
