@@ -48,11 +48,11 @@ impl RustezeDrone {
         }
     }
 
-    fn packet_dispatcher(&self, packet: Packet) {
+    fn packet_dispatcher(&mut self, packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
                 log_debug!("Drone {} received a fragment", self.id);
-                // self.fragment_handler(fragment, packet.routing_header, packet.session_id);             
+                self.fragment_handler(fragment, packet.routing_header, packet.session_id);             
             }
             PacketType::Nack(nack) => {
                 log_debug!("Drone {} received nack", self.id);
@@ -85,7 +85,6 @@ impl RustezeDrone {
                                 Some(sender) => {
                                     let packet = Packet::new(PacketType::MsgFragment(fragment), Box::new(source_routing_header), pusession_id);
                                     sender.send(packet).unwrap();
-                                    let x: DroneOptions;
                                 }
                             }
                         }
@@ -101,7 +100,7 @@ impl RustezeDrone {
         }
     }
 
-    pub fn internal_run(&self) {
+    pub fn internal_run(&mut self) {
         loop {
             select! {
                 recv(self.receiver) -> msg => {
