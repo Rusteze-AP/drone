@@ -70,7 +70,7 @@ impl RustezeDrone {
                         None => {
                             log_debug!("Drone {} received fragment and it is at the edge", self.id);
                         }
-                        Some(next_node) => match self.senders.get(&next_node) {
+                        Some(next_node) => match self.packet_send.get(&next_node) {
                             None => {
                                 log_debug!("Drone {} received fragment and can't forward", self.id);
                             }
@@ -97,7 +97,7 @@ impl RustezeDrone {
     pub fn internal_run(&mut self) {
         loop {
             select! {
-                recv(self.receiver) -> msg => {
+                recv(self.packet_recv) -> msg => {
                     match msg {
                         Ok(msg) => self.packet_dispatcher(msg),
                         Err(_) => {
@@ -106,7 +106,7 @@ impl RustezeDrone {
                         }
                     }
                 }
-                recv(self.controller_receiver) -> msg => {
+                recv(self.sim_contr_recv) -> msg => {
                     if let Ok(msg) = msg {
                         log_debug!("Drone {} received message from controller", self.id);
                     } else {

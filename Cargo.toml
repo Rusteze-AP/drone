@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 crossbeam = "0.8.4"
-wg_internal = { git = "ssh://git@github.com/Rusteze-AP/RS_WGL_2024.git", branch = "drone"}
+wg_internal = { git = "https://git@github.com/Rusteze-AP/RS_WGL_2024.git", branch = "drone"}
 
 [lib]
 name = "drone"
