@@ -13,20 +13,22 @@ use wg_internal::packet::PacketType;
 
 pub struct RustezeDrone {
     id: NodeId,
-    receiver: Receiver<Packet>,
-    senders: HashMap<NodeId, Sender<Packet>>,
-    controller_receiver: Receiver<Command>,
-    controller_sender: Sender<Command>,
+    pdr: f32,
+    packet_recv: Receiver<Packet>,
+    packet_send: HashMap<NodeId, Sender<Packet>>,
+    sim_contr_recv: Receiver<Command>,
+    sim_contr_send: Sender<Command>,
 }
 
 impl Drone for RustezeDrone {
     fn new(options: DroneOptions) -> Self {
         Self {
             id: options.id,
-            receiver: options.packet_recv,
-            senders: HashMap::new(),
-            controller_receiver: options.sim_contr_recv,
-            controller_sender: options.sim_contr_send,
+            pdu: options.pdr,
+            packet_recv: options.packet_recv,
+            packet_send: options.packet_send,
+            sim_contr_recv: options.sim_contr_recv,
+            sim_contr_send: options.sim_contr_send,
         }
     }
 
@@ -47,6 +49,9 @@ impl RustezeDrone {
             }
             PacketType::Ack(ack) => {
                 log_debug!("Drone {} received ack", self.id);
+            }
+            _ => {
+                log_debug!("Drone {} received unknown packet", self.id);
             }
         }
     }

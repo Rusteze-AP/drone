@@ -1,5 +1,5 @@
 use wg_internal::network::{SourceRoutingHeader, NodeId};
-use wg_internal::packet::{Fragment, FragmentData, Packet, PacketType};
+use wg_internal::packet::{Fragment, Packet, PacketType};
 
 pub trait RustezePacket {
     fn new(
