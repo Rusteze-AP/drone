@@ -1,4 +1,4 @@
-use wg_internal::network::{SourceRoutingHeader, NodeId};
+use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{Fragment, Packet, PacketType};
 
 pub trait RustezePacket {
@@ -43,7 +43,7 @@ impl RustezePacket for Packet {
 
 pub trait RustezeFragment {
     fn default() -> Self;
-    fn new(fragment_index: u64, total_n_fragments: u64, data: FragmentData) -> Self;
+    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 80]) -> Fragment;
 }
 
 impl RustezeFragment for Fragment {
@@ -51,17 +51,16 @@ impl RustezeFragment for Fragment {
         Self {
             fragment_index: 0,
             total_n_fragments: 0,
-            data: FragmentData {
-                length: 0,
-                data: [0; 80],
-            },
+            length: 0,
+            data: [0; 80],
         }
     }
 
-    fn new(fragment_index: u64, total_n_fragments: u64, data: FragmentData) -> Fragment {
+    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 80]) -> Fragment {
         Fragment {
             fragment_index,
             total_n_fragments,
+            length,
             data,
         }
     }
@@ -76,7 +75,6 @@ pub trait RustezeSourceRoutingHeader {
     fn decrement_index(&mut self);
     fn get_next_hop(&self) -> Option<NodeId>;
     fn get_previous_hop(&self) -> Option<NodeId>;
-    
 }
 
 impl RustezeSourceRoutingHeader for SourceRoutingHeader {
@@ -86,18 +84,18 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
             hop_index: 0,
         }
     }
-    
+
     fn new(hops: Vec<NodeId>, hop_index: usize) -> Self {
         Self { hops, hop_index }
     }
-    
+
     fn to_source_routing_header(&self) -> Self {
         Self {
             hop_index: self.hop_index,
             hops: self.hops.clone(),
         }
     }
-    
+
     fn get_current_hop(&self) -> Option<NodeId> {
         match self.hops.get(self.hop_index) {
             None => None,
@@ -113,7 +111,7 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
         self.hop_index -= 1;
     }
 
-    fn get_next_hop(&self) -> Option<NodeId> {        
+    fn get_next_hop(&self) -> Option<NodeId> {
         match self.hops.get(self.hop_index + 1) {
             None => None,
             Some(current) => Some(*current),
