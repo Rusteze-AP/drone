@@ -24,7 +24,7 @@ impl Drone for RustezeDrone {
     fn new(options: DroneOptions) -> Self {
         Self {
             id: options.id,
-            pdu: options.pdr,
+            pdr: options.pdr,
             packet_recv: options.packet_recv,
             packet_send: options.packet_send,
             sim_contr_recv: options.sim_contr_recv,
