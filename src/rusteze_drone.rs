@@ -1,15 +1,11 @@
 use crate::log_debug;
-use crate::messages::RustezePacket;
-use crate::messages::RustezeSourceRoutingHeader;
+use crate::messages::{RustezeSourceRoutingHeader, RustezePacket};
 use crossbeam::channel::{select, Receiver, Sender};
 use std::collections::HashMap;
 use wg_internal::controller::Command;
 use wg_internal::drone::{Drone, DroneOptions};
-use wg_internal::network::NodeId;
-use wg_internal::network::SourceRoutingHeader;
-use wg_internal::packet::Fragment;
-use wg_internal::packet::Packet;
-use wg_internal::packet::PacketType;
+use wg_internal::network::{NodeId,SourceRoutingHeader};
+use wg_internal::packet::{Fragment, Packet, PacketType};
 
 pub struct RustezeDrone {
     id: NodeId,
