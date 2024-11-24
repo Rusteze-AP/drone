@@ -69,7 +69,7 @@ dependencies = [
 [[package]]
 name = "wg_config"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 dependencies = [
  "wg_network",
 ]
@@ -77,7 +77,7 @@ dependencies = [
 [[package]]
 name = "wg_controller"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 dependencies = [
  "crossbeam-channel",
  "wg_network",
@@ -87,7 +87,7 @@ dependencies = [
 [[package]]
 name = "wg_drone"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 dependencies = [
  "crossbeam-channel",
  "wg_controller",
@@ -98,7 +98,7 @@ dependencies = [
 [[package]]
 name = "wg_internal"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 dependencies = [
  "wg_config",
  "wg_controller",
@@ -110,12 +110,12 @@ dependencies = [
 [[package]]
 name = "wg_network"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 
 [[package]]
 name = "wg_packet"
 version = "0.1.0"
-source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=drone#851c1daef7202edfb359459f73dd5575ca5e30b5"
+source = "git+https://git@github.com/Rusteze-AP/RS_WGL_2024.git?branch=main#52cd953a96fe23f312c5e98027bbca5351066d78"
 dependencies = [
  "wg_network",
 ]
