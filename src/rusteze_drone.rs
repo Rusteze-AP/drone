@@ -34,6 +34,11 @@ impl Drone for RustezeDrone {
 }
 
 impl RustezeDrone {
+    /// Return the NodeId of the Drone
+    pub fn get_id(&self) -> NodeId {
+        self.id
+    }
+
     fn packet_dispatcher(&mut self, packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
@@ -90,6 +95,20 @@ impl RustezeDrone {
         }
     }
 
+    fn execute_command(&mut self, command: DroneCommand) {
+        match command {
+            DroneCommand::AddSender(id, sender ) => {
+                unimplemented!()
+            },
+            DroneCommand::SetPacketDropRate(pdr) => {
+                unimplemented!()
+            },
+            DroneCommand::Crash => {
+                unimplemented!()
+            }
+        }
+    }
+
     pub fn internal_run(&mut self) {
         loop {
             select! {
@@ -102,11 +121,11 @@ impl RustezeDrone {
                         }
                     }
                 }
-                recv(self.controller_recv) -> msg => {
-                    if let Ok(msg) = msg {
+                recv(self.controller_recv) -> command => {
+                    if let Ok(command) = command {
                         log_debug!("Drone {} received message from controller", self.id);
                     } else {
-                        log_debug!("Drone {} controller receiver disconnected", self.id);
+                        log_debug!("Drone {} controller receiver disconnected from Simulation Controller", self.id);
                         break;
                     }
                 }
