@@ -2,7 +2,7 @@ use crate::log_debug;
 use crate::messages::{RustezeSourceRoutingHeader, RustezePacket};
 use crossbeam::channel::{select, Receiver, Sender};
 use std::collections::HashMap;
-use wg_internal::controller::Command;
+use wg_internal::controller::{NodeEvent, DroneCommand};
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::{NodeId,SourceRoutingHeader};
 use wg_internal::packet::{Fragment, Packet, PacketType};
@@ -10,10 +10,10 @@ use wg_internal::packet::{Fragment, Packet, PacketType};
 pub struct RustezeDrone {
     id: NodeId,
     pdr: f32,
-    packet_recv: Receiver<Packet>,
     packet_send: HashMap<NodeId, Sender<Packet>>,
-    sim_contr_recv: Receiver<Command>,
-    sim_contr_send: Sender<Command>,
+    packet_recv: Receiver<Packet>,
+    controller_send: Sender<NodeEvent>,
+    controller_recv: Receiver<DroneCommand>,
 }
 
 impl Drone for RustezeDrone {
@@ -21,10 +21,10 @@ impl Drone for RustezeDrone {
         Self {
             id: options.id,
             pdr: options.pdr,
-            packet_recv: options.packet_recv,
             packet_send: options.packet_send,
-            sim_contr_recv: options.sim_contr_recv,
-            sim_contr_send: options.sim_contr_send,
+            packet_recv: options.packet_recv,
+            controller_send: options.controller_send,
+            controller_recv: options.controller_recv,
         }
     }
 
@@ -102,7 +102,7 @@ impl RustezeDrone {
                         }
                     }
                 }
-                recv(self.sim_contr_recv) -> msg => {
+                recv(self.controller_recv) -> msg => {
                     if let Ok(msg) = msg {
                         log_debug!("Drone {} received message from controller", self.id);
                     } else {
