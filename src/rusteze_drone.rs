@@ -116,7 +116,7 @@ impl RustezeDrone {
         }
     }
 
-    pub fn internal_run(&mut self) {
+    fn internal_run(&mut self) {
         loop {
             if self.terminated {
                 log_debug!("Drone {} terminated", self.id);
