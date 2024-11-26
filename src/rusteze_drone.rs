@@ -14,6 +14,7 @@ pub struct RustezeDrone {
     packet_recv: Receiver<Packet>,
     controller_send: Sender<NodeEvent>,
     controller_recv: Receiver<DroneCommand>,
+    terminated: bool,
 }
 
 impl Drone for RustezeDrone {
@@ -25,6 +26,7 @@ impl Drone for RustezeDrone {
             packet_recv: options.packet_recv,
             controller_send: options.controller_send,
             controller_recv: options.controller_recv,
+            terminated: false,
         }
     }
 
@@ -98,19 +100,28 @@ impl RustezeDrone {
     fn execute_command(&mut self, command: DroneCommand) {
         match command {
             DroneCommand::AddSender(id, sender ) => {
-                unimplemented!()
+                self.packet_send.insert(id, sender);
+                log_debug!("Added new sender for node {}", id);
             },
             DroneCommand::SetPacketDropRate(pdr) => {
-                unimplemented!()
+                self.pdr = pdr;
+                log_debug!("Packet drop rate of node {} changed to {}", self.id, pdr);
             },
             DroneCommand::Crash => {
-                unimplemented!()
+                // exit the thread
+                log_debug!("Received crash command for node {}", self.id);
+                self.terminated = true;
+                // TODO Decide how to handle the crash (packets still in channel?)
             }
         }
     }
 
     pub fn internal_run(&mut self) {
         loop {
+            if self.terminated {
+                log_debug!("Drone {} terminated", self.id);
+                break;
+            }
             select! {
                 recv(self.packet_recv) -> msg => {
                     match msg {
@@ -124,6 +135,8 @@ impl RustezeDrone {
                 recv(self.controller_recv) -> command => {
                     if let Ok(command) = command {
                         log_debug!("Drone {} received message from controller", self.id);
+                        self.execute_command(command);
+
                     } else {
                         log_debug!("Drone {} controller receiver disconnected from Simulation Controller", self.id);
                         break;
