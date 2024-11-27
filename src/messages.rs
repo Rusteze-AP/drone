@@ -2,22 +2,14 @@ use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{Fragment, Packet, PacketType};
 
 pub trait RustezePacket {
-    fn new(
-        pack_type: PacketType,
-        routing_header: Box<impl RustezeSourceRoutingHeader>,
-        session_id: u64,
-    ) -> Self;
+    fn new(pack_type: PacketType, routing_header: SourceRoutingHeader, session_id: u64) -> Self;
     fn get_pack_type(&self) -> &PacketType;
-    fn get_routing_header(&self) -> Box<impl RustezeSourceRoutingHeader>;
+    // fn get_routing_header(&self) -> Box<impl RustezeSourceRoutingHeader>;
     fn get_session_id(&self) -> u64;
 }
 
 impl RustezePacket for Packet {
-    fn new(
-        pack_type: PacketType,
-        routing_header: Box<impl RustezeSourceRoutingHeader>,
-        session_id: u64,
-    ) -> Self {
+    fn new(pack_type: PacketType, routing_header: SourceRoutingHeader, session_id: u64) -> Self {
         Self {
             pack_type,
             routing_header: routing_header.to_source_routing_header(),
@@ -29,12 +21,12 @@ impl RustezePacket for Packet {
         &self.pack_type
     }
 
-    fn get_routing_header(&self) -> Box<impl RustezeSourceRoutingHeader> {
-        Box::new(SourceRoutingHeader {
-            hop_index: self.routing_header.hop_index,
-            hops: self.routing_header.hops.clone(),
-        })
-    }
+    // fn get_routing_header(&self) -> SourceRoutingHeader {
+    //     Box::new(SourceRoutingHeader {
+    //         hop_index: self.routing_header.hop_index,
+    //         hops: self.routing_header.hops.clone(),
+    //     })
+    // }
 
     fn get_session_id(&self) -> u64 {
         self.session_id
