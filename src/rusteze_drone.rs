@@ -3,7 +3,7 @@ use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use rand::Rng;
 use std::collections::HashMap;
-use wg_internal::controller::Command;
+use wg_internal::controller::{NodeEvent, DroneCommand};
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
@@ -11,10 +11,11 @@ use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
 pub struct RustezeDrone {
     id: NodeId,
     pdr: f32,
-    packet_recv: Receiver<Packet>,
     packet_send: HashMap<NodeId, Sender<Packet>>,
-    sim_contr_recv: Receiver<Command>,
-    sim_contr_send: Sender<Command>,
+    packet_recv: Receiver<Packet>,
+    controller_send: Sender<NodeEvent>,
+    controller_recv: Receiver<DroneCommand>,
+    terminated: bool,
 }
 
 impl Drone for RustezeDrone {
@@ -22,10 +23,11 @@ impl Drone for RustezeDrone {
         Self {
             id: options.id,
             pdr: options.pdr,
-            packet_recv: options.packet_recv,
             packet_send: options.packet_send,
-            sim_contr_recv: options.sim_contr_recv,
-            sim_contr_send: options.sim_contr_send,
+            packet_recv: options.packet_recv,
+            controller_send: options.controller_send,
+            controller_recv: options.controller_recv,
+            terminated: false,
         }
     }
 
@@ -35,6 +37,11 @@ impl Drone for RustezeDrone {
 }
 
 impl RustezeDrone {
+    /// Return the NodeId of the Drone
+    pub fn get_id(&self) -> NodeId {
+        self.id
+    }
+
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
@@ -147,6 +154,25 @@ impl RustezeDrone {
         }
     }
 
+    fn execute_command(&mut self, command: DroneCommand) {
+        match command {
+            DroneCommand::AddSender(id, sender ) => {
+                self.packet_send.insert(id, sender);
+                log_debug!("Added new sender for node {}", id);
+            },
+            DroneCommand::SetPacketDropRate(pdr) => {
+                self.pdr = pdr;
+                log_debug!("Packet drop rate of node {} changed to {}", self.id, pdr);
+            },
+            DroneCommand::Crash => {
+                // exit the thread
+                log_debug!("Received crash command for node {}", self.id);
+                self.terminated = true;
+                // TODO Decide how to handle the crash (packets still in channel?)
+            }
+        }
+    }
+
     fn send_nack(
         &mut self,
         nack_type: NackType,
@@ -201,6 +227,10 @@ impl RustezeDrone {
 
     fn internal_run(&mut self) {
         loop {
+            if self.terminated {
+                log_debug!("Drone {} terminated", self.id);
+                break;
+            }
             select! {
                 recv(self.packet_recv) -> msg => {
                     match msg {
@@ -211,11 +241,13 @@ impl RustezeDrone {
                         }
                     }
                 }
-                recv(self.sim_contr_recv) -> msg => {
-                    if let Ok(msg) = msg {
+                recv(self.controller_recv) -> command => {
+                    if let Ok(command) = command {
                         log_debug!("Drone {} received message from controller", self.id);
+                        self.execute_command(command);
+
                     } else {
-                        log_debug!("Drone {} controller receiver disconnected", self.id);
+                        log_debug!("Drone {} controller receiver disconnected from Simulation Controller", self.id);
                         break;
                     }
                 }
