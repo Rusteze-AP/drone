@@ -8,7 +8,7 @@ git-fetch-with-cli = true
 
 [dependencies]
 crossbeam = "0.8.4"
-wg_internal = { git = "https://github.com/Rusteze-AP/RS_WGL_2024", branch = "sim_controller_changes" }
+wg_internal = { git = "https://github.com/Rusteze-AP/RS_WGL_2024", branch = "main" }
 
 [lib]
 name = "rusteze_drone"
