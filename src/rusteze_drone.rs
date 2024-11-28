@@ -82,11 +82,11 @@ impl RustezeDrone {
         mut source_routing_header: SourceRoutingHeader,
         session_id: u64,
     ) {
-        match source_routing_header.get_next_hop() {
+        match source_routing_header.get_current_hop() {
             Some(hop) => {
                 if hop == self.id {
                     source_routing_header.increment_index();
-                    match source_routing_header.get_next_hop() {
+                    match source_routing_header.get_current_hop() {
                         None => {
                             log_debug!("Drone {} received fragment and it is at the edge", self.id);
                             self.send_nack(
@@ -204,9 +204,9 @@ impl RustezeDrone {
         source_routing_header: SourceRoutingHeader,
     ) {
         match source_routing_header.get_previous_hop() {
-            None => log_debug!("[ERR] - Unable to sand ack message back"),
+            None => log_debug!("[ERR-ACK] - No previous hop found"),
             Some(previous_node) => match self.packet_send.get(&previous_node) {
-                None => log_debug!("[ERR] - Unable to sand ack message back"),
+                None => log_debug!("[ERR-ACK] - No match found inside neighbours"),
                 Some(sender) => {
                     let packet = Packet::new(
                         PacketType::Ack(Ack { fragment_index }),
@@ -245,7 +245,6 @@ impl RustezeDrone {
                     if let Ok(command) = command {
                         log_debug!("Drone {} received message from controller", self.id);
                         self.execute_command(command);
-
                     } else {
                         log_debug!("Drone {} controller receiver disconnected from Simulation Controller", self.id);
                         break;
