@@ -3,7 +3,8 @@ use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use rand::Rng;
 use std::collections::HashMap;
-use wg_internal::controller::{NodeEvent, DroneCommand};
+use std::thread::current;
+use wg_internal::controller::{DroneCommand, NodeEvent};
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
@@ -45,24 +46,29 @@ impl RustezeDrone {
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
-                log_debug!("Drone {} received a fragment", self.id);
+                log_debug!("[DRONE-{}][🟢 FRAGMENT] - Received a fragment", self.id);
                 self.fragment_handler(fragment, packet.routing_header, packet.session_id);
             }
             PacketType::Nack(nack) => {
-                log_debug!("Drone {} received nack", self.id);
-                match packet.routing_header.get_previous_hop() {
-                    None => log_debug!("[ERR] - Unable to sand nack message back"),
-                    Some(previous_node) => {
-                        if previous_node == self.id {
-                            packet.routing_header.decrement_index();
+                log_debug!(
+                    "[DRONE-{}][🟢 NACK] - Received a nack from NODE {}",
+                    self.id,
+                    packet.routing_header.get_previous_hop().unwrap_or(0)
+                );
+                match packet.routing_header.get_current_hop() {
+                    None => log_debug!("[DRONE-{}][🔴 NACK] - No current hop found", self.id),
+                    Some(current_node) => {
+                        if current_node == self.id {
+                            packet.routing_header.increment_index();
                             self.send_nack(
                                 nack.nack_type,
                                 nack.fragment_index,
                                 packet.session_id,
                                 packet.routing_header,
                             );
+                            log_debug!("[DRONE-{}][🟢 NACK] - Nack forwarded!", self.id);
                         } else {
-                            log_debug!("[ERR] - Unable to sand nack message back");
+                            log_debug!("[DRONE-{}][🔴 NACK] - Nack received by the wrong node. Expected DRONE {}. Ignoring!", self.id, current_node);
                         }
                     }
                 }
@@ -108,11 +114,22 @@ impl RustezeDrone {
                             }
                             Some(sender) => {
                                 if self.to_drop() {
+                                    // TODO Add log_debug!
                                     self.send_nack(
                                         NackType::Dropped,
                                         fragment.fragment_index,
                                         session_id,
-                                        source_routing_header,
+                                        SourceRoutingHeader {
+                                            hop_index: 1,
+                                            hops: source_routing_header
+                                                .hops
+                                                .split_at(source_routing_header.hop_index)
+                                                .0
+                                                .iter()
+                                                .rev()
+                                                .cloned()
+                                                .collect(),
+                                        },
                                     );
                                 } else {
                                     let packet = Packet::new(
@@ -124,7 +141,17 @@ impl RustezeDrone {
                                     self.send_ack(
                                         fragment.fragment_index,
                                         session_id,
-                                        source_routing_header,
+                                        SourceRoutingHeader {
+                                            hop_index: 1,
+                                            hops: source_routing_header
+                                                .hops
+                                                .split_at(source_routing_header.hop_index)
+                                                .0
+                                                .iter()
+                                                .rev()
+                                                .cloned()
+                                                .collect(),
+                                        },
                                     );
                                 }
                             }
@@ -156,14 +183,14 @@ impl RustezeDrone {
 
     fn execute_command(&mut self, command: DroneCommand) {
         match command {
-            DroneCommand::AddSender(id, sender ) => {
+            DroneCommand::AddSender(id, sender) => {
                 self.packet_send.insert(id, sender);
                 log_debug!("Added new sender for node {}", id);
-            },
+            }
             DroneCommand::SetPacketDropRate(pdr) => {
                 self.pdr = pdr;
                 log_debug!("Packet drop rate of node {} changed to {}", self.id, pdr);
-            },
+            }
             DroneCommand::Crash => {
                 // exit the thread
                 log_debug!("Received crash command for node {}", self.id);
@@ -184,10 +211,15 @@ impl RustezeDrone {
             fragment_index,
             nack_type,
         };
-        match source_routing_header.get_previous_hop() {
-            None => log_debug!("[ERR] - Unable to sand nack message back"),
+        match source_routing_header.get_current_hop() {
+            None => log_debug!("[🔴 NACK] - No previous hop found"),
             Some(previous_node) => match self.packet_send.get(&previous_node) {
-                None => log_debug!("[ERR] - Unable to sand nack message back"),
+                None => log_debug!(
+                    "[🔴 NACK] - No match of Node {} found inside neighbours + {} {:?}",
+                    previous_node,
+                    source_routing_header.hop_index,
+                    source_routing_header.hops
+                ),
                 Some(sender) => {
                     let packet =
                         Packet::new(PacketType::Nack(nack), source_routing_header, session_id);
@@ -203,10 +235,15 @@ impl RustezeDrone {
         session_id: u64,
         source_routing_header: SourceRoutingHeader,
     ) {
-        match source_routing_header.get_previous_hop() {
-            None => log_debug!("[ERR-ACK] - No previous hop found"),
+        match source_routing_header.get_current_hop() {
+            None => log_debug!("[🔴 ACK] - No previous hop found"),
             Some(previous_node) => match self.packet_send.get(&previous_node) {
-                None => log_debug!("[ERR-ACK] - No match found inside neighbours"),
+                None => log_debug!(
+                    "[🔴 ACK] - No match of Node {} found inside neighbours {:?}, {}",
+                    previous_node,
+                    source_routing_header.hops,
+                    source_routing_header.hop_index
+                ),
                 Some(sender) => {
                     let packet = Packet::new(
                         PacketType::Ack(Ack { fragment_index }),
