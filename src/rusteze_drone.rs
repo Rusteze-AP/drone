@@ -2,21 +2,25 @@ use crate::log_debug;
 use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use rand::Rng;
-use std::collections::HashMap;
-use std::thread::current;
+use std::collections::{HashMap, HashSet};
 use wg_internal::controller::{DroneCommand, NodeEvent};
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::{NodeId, SourceRoutingHeader};
-use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
+use wg_internal::packet::{
+    Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType,
+};
 
 pub struct RustezeDrone {
     id: NodeId,
     pdr: f32,
-    packet_send: HashMap<NodeId, Sender<Packet>>,
+    packet_senders: HashMap<NodeId, Sender<Packet>>,
     packet_recv: Receiver<Packet>,
     controller_send: Sender<NodeEvent>,
     controller_recv: Receiver<DroneCommand>,
     terminated: bool,
+
+    // Flood related
+    flood_history: HashSet<u64>,
 }
 
 impl Drone for RustezeDrone {
@@ -24,11 +28,12 @@ impl Drone for RustezeDrone {
         Self {
             id: options.id,
             pdr: options.pdr,
-            packet_send: options.packet_send,
+            packet_senders: options.packet_send,
             packet_recv: options.packet_recv,
             controller_send: options.controller_send,
             controller_recv: options.controller_recv,
             terminated: false,
+            flood_history: HashSet::new(),
         }
     }
 
@@ -76,8 +81,15 @@ impl RustezeDrone {
             PacketType::Ack(ack) => {
                 log_debug!("Drone {} received ack", self.id);
             }
+            PacketType::FloodRequest(flood_req) => {
+                self.flood_req_handler(flood_req);
+            }
+            PacketType::FloodResponse(flood_res) => {
+                log_debug!("Drone {} received flood response {:?}", self.id, flood_res);
+                //TODO make fragment handler generic
+            }
             _ => {
-                log_debug!("Drone {} received unknown packet", self.id);
+                log_debug!("Drone {} received unknown packet {:?}", self.id, packet);
             }
         }
     }
@@ -102,7 +114,7 @@ impl RustezeDrone {
                                 source_routing_header,
                             )
                         }
-                        Some(next_node) => match self.packet_send.get(&next_node) {
+                        Some(next_node) => match self.packet_senders.get(&next_node) {
                             None => {
                                 log_debug!("Drone {} received fragment and can't forward", self.id);
                                 self.send_nack(
@@ -184,7 +196,7 @@ impl RustezeDrone {
     fn execute_command(&mut self, command: DroneCommand) {
         match command {
             DroneCommand::AddSender(id, sender) => {
-                self.packet_send.insert(id, sender);
+                self.packet_senders.insert(id, sender);
                 log_debug!("Added new sender for node {}", id);
             }
             DroneCommand::SetPacketDropRate(pdr) => {
@@ -213,7 +225,7 @@ impl RustezeDrone {
         };
         match source_routing_header.get_current_hop() {
             None => log_debug!("[🔴 NACK] - No previous hop found"),
-            Some(previous_node) => match self.packet_send.get(&previous_node) {
+            Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
                     "[🔴 NACK] - No match of Node {} found inside neighbours + {} {:?}",
                     previous_node,
@@ -237,7 +249,7 @@ impl RustezeDrone {
     ) {
         match source_routing_header.get_current_hop() {
             None => log_debug!("[🔴 ACK] - No previous hop found"),
-            Some(previous_node) => match self.packet_send.get(&previous_node) {
+            Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
                     "[🔴 ACK] - No match of Node {} found inside neighbours {:?}, {}",
                     previous_node,
@@ -289,5 +301,98 @@ impl RustezeDrone {
                 }
             }
         }
+    }
+}
+
+impl RustezeDrone {
+    fn send_flood_response(&self, dest: NodeId, flood_res: Packet) {
+        match self.packet_senders.get(&dest) {
+            Some(sender) => {
+                sender.send(flood_res).unwrap();
+            }
+            None => {
+                log_debug!("Drone {} can't send flood response to {}", self.id, dest);
+            }
+        }
+    }
+
+    fn build_flood_response(flood_req: FloodRequest) -> (NodeId, Packet) {
+        let mut hops: Vec<NodeId> = flood_req.path_trace.iter().map(|(id, _)| *id).collect();
+        hops.reverse();
+        let dest = hops[1];
+
+        let flood_res = FloodResponse {
+            flood_id: flood_req.flood_id,
+            path_trace: flood_req.path_trace,
+        };
+        let srh = SourceRoutingHeader { hop_index: 0, hops };
+        let msg = Packet {
+            pack_type: PacketType::FloodResponse(flood_res),
+            routing_header: srh,
+            session_id: 1,
+        };
+
+        (dest, msg)
+    }
+
+    fn handle_known_flood_id(&self, flood_req: FloodRequest) {
+        let (dest, msg) = Self::build_flood_response(flood_req);
+        self.send_flood_response(dest, msg);
+    }
+
+    fn handle_new_flood_id(&self, flood_req: FloodRequest) {
+        // If drone has no neighbours except the sender of flood req
+        if self.packet_senders.len() == 1 {
+            log_debug!("Drone {} has no neighbours", self.id);
+            let (dest, msg) = Self::build_flood_response(flood_req);
+            self.send_flood_response(dest, msg);
+            return;
+        }
+
+        // Forward flood req to neighbours
+        for (id, sx) in &self.packet_senders {
+            // Skip flood req sender
+            let sender_id = flood_req.path_trace[flood_req.path_trace.len() - 2].0;
+            if *id == sender_id {
+                continue;
+            }
+            log_debug!(
+                "Drone {} forwarding flood request to neighbour {}",
+                self.id,
+                id
+            );
+
+            let msg = Packet {
+                pack_type: PacketType::FloodRequest(flood_req.clone()),
+                routing_header: SourceRoutingHeader {
+                    hop_index: 0,
+                    hops: vec![],
+                },
+                session_id: 1,
+            };
+            sx.send(msg).unwrap();
+        }
+    }
+
+    fn flood_req_handler(&mut self, mut flood_req: FloodRequest) {
+        // Either case add the drone to the path trace
+        flood_req.path_trace.push((self.id, NodeType::Drone));
+
+        if !self.flood_history.insert(flood_req.flood_id) {
+            log_debug!(
+                "Drone {} already received flood request {}",
+                self.id,
+                flood_req.flood_id
+            );
+            self.handle_known_flood_id(flood_req);
+            return;
+        }
+
+        log_debug!(
+            "Drone {} received new flood request {}",
+            self.id,
+            flood_req.flood_id
+        );
+        self.handle_new_flood_id(flood_req);
     }
 }
