@@ -52,7 +52,7 @@ fn packet_drop() {
 fn drone_chain_packet_drop() {
     // Client<1> channels
     let (c_send, c_recv) = unbounded();
-    // Sever<21> channels
+    // Server<21> channels
     let (s_send, s_recv) = unbounded();
     // Drone 11
     let (d_send, d_recv) = unbounded();
@@ -83,4 +83,41 @@ fn drone_chain_packet_drop() {
     });
 
     generic_chain_packet_drop(drone, drone2, &d_send, &c_recv);
+}
+
+#[test]
+fn drone_chain_packet_ack() {
+    // Client<1> channels
+    let (c_send, c_recv) = unbounded();
+    // Server<21> channels
+    let (s_send, s_recv) = unbounded();
+    // Drone 11
+    let (d_send, d_recv) = unbounded();
+    // Drone 12
+    let (d12_send, d12_recv) = unbounded();
+    // SC - needed to not make the drone crash
+    let (_d_command_send, d_command_recv) = unbounded();
+
+    // Drone 11
+    let neighbours11 = HashMap::from([(12, d12_send.clone()), (1, c_send.clone())]);
+    let mut drone = RustezeDrone::new(DroneOptions {
+        id: 11,
+        pdr: 0.0,
+        packet_send: neighbours11,
+        packet_recv: d_recv.clone(),
+        controller_send: unbounded().0,
+        controller_recv: d_command_recv.clone(),
+    });
+    // Drone 12
+    let neighbours12 = HashMap::from([(11, d_send.clone()), (21, s_send.clone())]);
+    let mut drone2 = RustezeDrone::new(DroneOptions {
+        id: 12,
+        pdr: 0.0,
+        packet_send: neighbours12,
+        packet_recv: d12_recv.clone(),
+        controller_send: unbounded().0,
+        controller_recv: d_command_recv.clone(),
+    });
+
+    generic_chain_packet_ack(drone, drone2, &d_send, &c_recv, &s_recv);
 }
