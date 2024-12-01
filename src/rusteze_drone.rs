@@ -251,7 +251,7 @@ impl RustezeDrone {
                 source_routing_header.hops,
                 source_routing_header.hop_index
             ),
-            Some(previous_node) => match self.packet_send.get(&previous_node) {
+            Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
                     "[🔴 NACK] - No match of NODE {} found inside neighbours {:?} at hop_index {}",
                     previous_node,
@@ -284,7 +284,7 @@ impl RustezeDrone {
                 source_routing_header.hops,
                 source_routing_header.hop_index
             ),
-            Some(previous_node) => match self.packet_send.get(&previous_node) {
+            Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
                     "[🔴 ACK] - No match of NODE {} found inside neighbours {:?} at hop_index {}",
                     previous_node,
