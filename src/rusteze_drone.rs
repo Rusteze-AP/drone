@@ -342,9 +342,7 @@ impl RustezeDrone {
             }
         }
     }
-}
 
-impl RustezeDrone {
     fn send_flood_response(&self, dest: NodeId, flood_res: Packet) {
         match self.packet_senders.get(&dest) {
             Some(sender) => {
