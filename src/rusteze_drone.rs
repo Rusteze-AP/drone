@@ -51,7 +51,11 @@ impl RustezeDrone {
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         match packet.pack_type {
             PacketType::MsgFragment(fragment) => {
-                log_debug!("[DRONE-{}][🟢 FRAGMENT] - Received a fragment", self.id);
+                log_debug!(
+                    "[DRONE-{}][🟢 FRAGMENT] - Received a fragment from NODE {}",
+                    self.id,
+                    packet.routing_header.get_previous_hop().unwrap_or(0)
+                );
                 self.fragment_handler(fragment, packet.routing_header, packet.session_id);
             }
             PacketType::Nack(nack) => {
@@ -71,15 +75,33 @@ impl RustezeDrone {
                                 packet.session_id,
                                 packet.routing_header,
                             );
-                            log_debug!("[DRONE-{}][🟢 NACK] - Nack forwarded!", self.id);
                         } else {
-                            log_debug!("[DRONE-{}][🔴 NACK] - Nack received by the wrong node. Expected DRONE {}. Ignoring!", self.id, current_node);
+                            log_debug!("[DRONE-{}][🔴 NACK] - Nack received by the wrong node. Found DRONE {} at current hop. Ignoring!", self.id, current_node);
                         }
                     }
                 }
             }
             PacketType::Ack(ack) => {
-                log_debug!("Drone {} received ack", self.id);
+                log_debug!(
+                    "[DRONE-{}][🟢 ACK] - Received an ack from NODE {}",
+                    self.id,
+                    packet.routing_header.get_previous_hop().unwrap_or(0)
+                );
+                match packet.routing_header.get_current_hop() {
+                    None => log_debug!("[DRONE-{}][🔴 ACK] - No current hop found", self.id),
+                    Some(current_node) => {
+                        if current_node == self.id {
+                            packet.routing_header.increment_index();
+                            self.send_ack(
+                                ack.fragment_index,
+                                packet.session_id,
+                                packet.routing_header,
+                            );
+                        } else {
+                            log_debug!("[DRONE-{}][🔴 ACK] - Ack received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, current_node);
+                        }
+                    }
+                }
             }
             PacketType::FloodRequest(flood_req) => {
                 self.flood_req_handler(flood_req);
@@ -224,17 +246,26 @@ impl RustezeDrone {
             nack_type,
         };
         match source_routing_header.get_current_hop() {
-            None => log_debug!("[🔴 NACK] - No previous hop found"),
+            None => log_debug!(
+                "[🔴 NACK] - No next hop found. Hops {:?} with hop_index {}",
+                source_routing_header.hops,
+                source_routing_header.hop_index
+            ),
             Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
-                    "[🔴 NACK] - No match of Node {} found inside neighbours + {} {:?}",
+                    "[🔴 NACK] - No match of NODE {} found inside neighbours {:?} at hop_index {}",
                     previous_node,
-                    source_routing_header.hop_index,
-                    source_routing_header.hops
+                    source_routing_header.hops,
+                    source_routing_header.hop_index
                 ),
                 Some(sender) => {
                     let packet =
                         Packet::new(PacketType::Nack(nack), source_routing_header, session_id);
+                    log_debug!(
+                        "[DRONE-{}][🟢 NACK] - Ack forwarded to NODE {}",
+                        self.id,
+                        previous_node
+                    );
                     sender.send(packet).unwrap();
                 }
             },
@@ -248,10 +279,14 @@ impl RustezeDrone {
         source_routing_header: SourceRoutingHeader,
     ) {
         match source_routing_header.get_current_hop() {
-            None => log_debug!("[🔴 ACK] - No previous hop found"),
+            None => log_debug!(
+                "[🔴 ACK] - No next hop found. Hops {:?} with hop_index {}",
+                source_routing_header.hops,
+                source_routing_header.hop_index
+            ),
             Some(previous_node) => match self.packet_senders.get(&previous_node) {
                 None => log_debug!(
-                    "[🔴 ACK] - No match of Node {} found inside neighbours {:?}, {}",
+                    "[🔴 ACK] - No match of NODE {} found inside neighbours {:?} at hop_index {}",
                     previous_node,
                     source_routing_header.hops,
                     source_routing_header.hop_index
@@ -261,6 +296,11 @@ impl RustezeDrone {
                         PacketType::Ack(Ack { fragment_index }),
                         source_routing_header,
                         session_id,
+                    );
+                    log_debug!(
+                        "[DRONE-{}][🟢 ACK] - Ack forwarded to NODE {}",
+                        self.id,
+                        previous_node
                     );
                     sender.send(packet).unwrap();
                 }
