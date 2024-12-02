@@ -5,7 +5,7 @@ use logger::Logger;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use wg_internal::controller::{DroneCommand, NodeEvent};
-use wg_internal::drone::{Drone, DroneOptions};
+use wg_internal::drone::Drone;
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{
     Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType,
@@ -26,14 +26,21 @@ pub struct RustezeDrone {
 }
 
 impl Drone for RustezeDrone {
-    fn new(options: DroneOptions) -> Self {
+    fn new(
+        id: NodeId,
+        controller_send: Sender<NodeEvent>,
+        controller_recv: Receiver<DroneCommand>,
+        packet_recv: Receiver<Packet>,
+        packet_send: HashMap<NodeId, Sender<Packet>>,
+        pdr: f32,
+    ) -> Self {
         Self {
-            id: options.id,
-            pdr: options.pdr,
-            packet_senders: options.packet_send,
-            packet_recv: options.packet_recv,
-            controller_send: options.controller_send,
-            controller_recv: options.controller_recv,
+            id,
+            pdr,
+            packet_senders: packet_send,
+            packet_recv,
+            controller_send,
+            controller_recv,
             terminated: false,
             flood_history: HashSet::new(),
             logger: Logger::new(true, "RustezeDrone".to_string()),
@@ -132,7 +139,11 @@ impl RustezeDrone {
                 self.flood_req_handler(flood_req);
             }
             PacketType::FloodResponse(flood_res) => {
-                log_debug!("[Drone-{}][🟢 FLOOD RESPONSE] received flood response {:?}", self.id, flood_res);
+                log_debug!(
+                    "[Drone-{}][🟢 FLOOD RESPONSE] received flood response {:?}",
+                    self.id,
+                    flood_res
+                );
                 //TODO make fragment handler generic
                 match packet.routing_header.get_current_hop() {
                     None => log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
@@ -295,6 +306,7 @@ impl RustezeDrone {
                 self.terminated = true;
                 // TODO Decide how to handle the crash (packets still in channel?)
             }
+            DroneCommand::RemoveSender(_) => todo!()
         }
     }
 

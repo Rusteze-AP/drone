@@ -1,7 +1,7 @@
 use crossbeam::channel::unbounded;
 use std::collections::HashMap;
 use std::thread;
-use wg_internal::drone::{Drone, DroneOptions};
+use wg_internal::drone::Drone;
 use wg_internal::network::SourceRoutingHeader;
 use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
 
@@ -13,7 +13,7 @@ fn create_sample_packet() -> Packet {
         pack_type: PacketType::MsgFragment(Fragment {
             fragment_index: 1,
             total_n_fragments: 1,
-            length: 80,
+            length: 128,
             data: [1; 128],
         }),
         routing_header: SourceRoutingHeader {
@@ -34,14 +34,14 @@ pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
     let (_d_command_send, d_command_recv) = unbounded();
 
     let neighbours = HashMap::from([(12, d2_send.clone())]);
-    let mut drone = T::new(DroneOptions {
-        id: 11,
-        pdr: 0.0,
-        packet_send: neighbours,
-        packet_recv: d_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv,
-    });
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv,
+        d_recv.clone(),
+        neighbours,
+        0.0,
+    );
     // Spawn the drone's run method in a separate thread
     thread::spawn(move || {
         drone.run();
@@ -67,14 +67,14 @@ pub fn generic_fragment_drop<T: Drone + Send + 'static>() {
     let (_d_command_send, d_command_recv) = unbounded();
 
     let neighbours = HashMap::from([(12, d_send.clone()), (1, c_send.clone())]);
-    let mut drone = T::new(DroneOptions {
-        id: 11,
-        pdr: 1.0,
-        packet_send: neighbours,
-        packet_recv: d_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv,
-    });
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv,
+        d_recv.clone(),
+        neighbours,
+        1.0,
+    );
 
     // Spawn the drone's run method in a separate thread
     thread::spawn(move || {
@@ -119,24 +119,24 @@ pub fn generic_chain_fragment_drop<T: Drone + Send + 'static>() {
 
     // Drone 11
     let neighbours11 = HashMap::from([(12, d12_send.clone()), (1, c_send.clone())]);
-    let mut drone = T::new(DroneOptions {
-        id: 11,
-        pdr: 0.0,
-        packet_send: neighbours11,
-        packet_recv: d_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv.clone(),
-    });
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv.clone(),
+        d_recv.clone(),
+        neighbours11,
+        0.0,
+    );
     // Drone 12
     let neighbours12 = HashMap::from([(11, d_send.clone()), (21, s_send.clone())]);
-    let mut drone2 = T::new(DroneOptions {
-        id: 12,
-        pdr: 1.0,
-        packet_send: neighbours12,
-        packet_recv: d12_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv.clone(),
-    });
+    let mut drone2 = T::new(
+        12,
+        unbounded().0,
+        d_command_recv.clone(),
+        d12_recv.clone(),
+        neighbours12,
+        1.0,
+    );
 
     // Spawn the drone's run method in a separate thread
     thread::spawn(move || {
@@ -197,24 +197,24 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
 
     // Drone 11
     let neighbours11 = HashMap::from([(12, d12_send.clone()), (1, c_send.clone())]);
-    let mut drone = T::new(DroneOptions {
-        id: 11,
-        pdr: 0.0,
-        packet_send: neighbours11,
-        packet_recv: d_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv.clone(),
-    });
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv.clone(),
+        d_recv.clone(),
+        neighbours11,
+        0.0,
+    );
     // Drone 12
     let neighbours12 = HashMap::from([(11, d_send.clone()), (21, s_send.clone())]);
-    let mut drone2 = T::new(DroneOptions {
-        id: 12,
-        pdr: 0.0,
-        packet_send: neighbours12,
-        packet_recv: d12_recv.clone(),
-        controller_send: unbounded().0,
-        controller_recv: d_command_recv.clone(),
-    });
+    let mut drone2 = T::new(
+        12,
+        unbounded().0,
+        d_command_recv.clone(),
+        d12_recv.clone(),
+        neighbours12,
+        0.0,
+    );
 
     // Spawn the drone's run method in a separate thread
     thread::spawn(move || {
