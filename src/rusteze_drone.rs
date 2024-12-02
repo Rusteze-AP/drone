@@ -36,7 +36,7 @@ impl Drone for RustezeDrone {
             controller_recv: options.controller_recv,
             terminated: false,
             flood_history: HashSet::new(),
-            logger: Logger::new(true),
+            logger: Logger::new(true, "RustezeDrone"),
         }
     }
 
