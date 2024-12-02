@@ -266,7 +266,13 @@ impl RustezeDrone {
                         self.id,
                         previous_node
                     );
+                    let p1 = packet.clone();
                     sender.send(packet).unwrap();
+                    match (nack_type){
+                        NackType::Dropped => {
+                            self.forward_to_sm_packetDropped(p1);}
+                        _ => self.forward_to_sm_packetSent(p1),
+                    }
                 }
             },
         }
@@ -302,7 +308,9 @@ impl RustezeDrone {
                         self.id,
                         previous_node
                     );
+                    let p1 = packet.clone();
                     sender.send(packet).unwrap();
+                    self.forward_to_sm_packetSent(p1);
                 }
             },
         }
@@ -432,5 +440,17 @@ impl RustezeDrone {
             flood_req.flood_id
         );
         self.handle_new_flood_id(flood_req);
+    }
+
+    pub fn forward_to_sm_packetSent(&self, packet: Packet) {
+        self.controller_send
+            .send(NodeEvent::PacketSent(packet))
+            .unwrap();
+    }
+
+    pub fn forward_to_sm_packetDropped(&self, packet: Packet) {
+        self.controller_send
+            .send(NodeEvent::PacketDropped(packet))
+            .unwrap();
     }
 }
