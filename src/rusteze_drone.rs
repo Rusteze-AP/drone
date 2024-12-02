@@ -326,14 +326,7 @@ impl RustezeDrone {
                         )
                         .as_str(),
                     );
-                    let p1 = packet.clone();
                     sender.send(packet).unwrap();
-                    match nack_type {
-                        NackType::Dropped => {
-                            self.forward_to_sm_packetDropped(p1);
-                        }
-                        _ => self.forward_to_sm_packetSent(p1),
-                    }
                 }
             },
         }
@@ -380,9 +373,7 @@ impl RustezeDrone {
                         )
                         .as_str(),
                     );
-                    let p1 = packet.clone();
                     sender.send(packet).unwrap();
-                    self.forward_to_sm_packetSent(p1);
                 }
             },
         }
