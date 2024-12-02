@@ -1,8 +1,8 @@
-// mod generic_fn;
-// use generic_fn::packet_generics::*;
+mod generic_fn;
+use generic_fn::fragment_generics::*;
 
 use rusteze_drone::RustezeDrone;
-use wg_internal::tests::*;
+// use wg_internal::tests::*;
 
 #[test]
 fn fragment_forward() {

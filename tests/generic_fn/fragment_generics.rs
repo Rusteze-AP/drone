@@ -14,7 +14,7 @@ fn create_sample_packet() -> Packet {
             fragment_index: 1,
             total_n_fragments: 1,
             length: 80,
-            data: [1; 80],
+            data: [1; 128],
         }),
         routing_header: SourceRoutingHeader {
             hop_index: 1,
