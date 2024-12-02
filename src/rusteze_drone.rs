@@ -132,11 +132,26 @@ impl RustezeDrone {
                 self.flood_req_handler(flood_req);
             }
             PacketType::FloodResponse(flood_res) => {
-                // log_debug!("Drone {} received flood response {:?}", self.id, flood_res);
+                log_debug!("[Drone-{}][🟢 FLOOD RESPONSE] received flood response {:?}", self.id, flood_res);
                 //TODO make fragment handler generic
-            }
-            _ => {
-                // log_debug!("Drone {} received unknown packet {:?}", self.id, packet);
+                match packet.routing_header.get_current_hop() {
+                    None => log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
+                    Some(current_node) => {
+                        if current_node == self.id {
+                            packet.routing_header.increment_index();
+                            self.send_flood_response(
+                                packet.routing_header.get_current_hop().unwrap(),
+                                Packet {
+                                    pack_type: PacketType::FloodResponse(flood_res),
+                                    routing_header: packet.routing_header,
+                                    session_id: packet.session_id,
+                                },
+                            );
+                        } else {
+                            log_debug!("[🔴 FLOOD RESPONSE] - Flood response received by the wrong Node. Found DRONE {} at current hop. Ignoring!", current_node);
+                        }
+                    }
+                }
             }
         }
     }
@@ -434,7 +449,7 @@ impl RustezeDrone {
             flood_id: flood_req.flood_id,
             path_trace: flood_req.path_trace,
         };
-        let srh = SourceRoutingHeader { hop_index: 0, hops };
+        let srh = SourceRoutingHeader { hop_index: 1, hops };
         let msg = Packet {
             pack_type: PacketType::FloodResponse(flood_res),
             routing_header: srh,

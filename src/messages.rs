@@ -35,7 +35,7 @@ impl RustezePacket for Packet {
 
 pub trait RustezeFragment {
     fn default() -> Self;
-    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 80]) -> Fragment;
+    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 128]) -> Fragment;
 }
 
 impl RustezeFragment for Fragment {
@@ -44,11 +44,11 @@ impl RustezeFragment for Fragment {
             fragment_index: 0,
             total_n_fragments: 0,
             length: 0,
-            data: [0; 80],
+            data: [0; 128],
         }
     }
 
-    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 80]) -> Fragment {
+    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 128]) -> Fragment {
         Fragment {
             fragment_index,
             total_n_fragments,
