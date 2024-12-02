@@ -1,9 +1,11 @@
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::unbounded;
 use std::collections::HashMap;
 use std::thread;
 use wg_internal::drone::{Drone, DroneOptions};
 use wg_internal::network::SourceRoutingHeader;
 use wg_internal::packet::{Ack, Fragment, Nack, NackType, Packet, PacketType};
+
+/* THE FOLLOWING TESTS ARE TO CHECK IF YOUR DRONE IS HANDLING CORRECTLY PACKETS (FRAGMENT) */
 
 /// Creates a sample packet for testing purposes. For convenience, using 1-10 for clients, 11-20 for drones and 21-30 for servers
 fn create_sample_packet() -> Packet {
@@ -23,7 +25,7 @@ fn create_sample_packet() -> Packet {
 }
 
 /// This function is used to test the packet forward functionality of a drone.
-pub fn generic_packet_forward<T: Drone + Send + 'static>() {
+pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
     // drone 2 <Packet>
     let (d_send, d_recv) = unbounded();
     // drone 3 <Packet>
@@ -56,7 +58,7 @@ pub fn generic_packet_forward<T: Drone + Send + 'static>() {
 }
 
 /// Checks if the packet is dropped by one drone. The drone MUST have 100% packet drop rate, otherwise the test will fail sometimes.
-pub fn generic_packet_drop<T: Drone + Send + 'static>() {
+pub fn generic_fragment_drop<T: Drone + Send + 'static>() {
     // Client 1
     let (c_send, c_recv) = unbounded();
     // Drone 11
@@ -103,7 +105,7 @@ pub fn generic_packet_drop<T: Drone + Send + 'static>() {
 }
 
 /// Checks if the packet is dropped by the second drone. The first drone must have 0% PDR and the second one 100% PDR, otherwise the test will fail sometimes.
-pub fn generic_chain_packet_drop<T: Drone + Send + 'static>() {
+pub fn generic_chain_fragment_drop<T: Drone + Send + 'static>() {
     // Client 1 channels
     let (c_send, c_recv) = unbounded();
     // Server 21 channels
@@ -181,7 +183,7 @@ pub fn generic_chain_packet_drop<T: Drone + Send + 'static>() {
 }
 
 /// Checks if the packet can reach its destination. Both drones must have 0% PDR, otherwise the test will fail sometimes.
-pub fn generic_chain_packet_ack<T: Drone + Send + 'static>() {
+pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
     // Client<1> channels
     let (c_send, c_recv) = unbounded();
     // Server<21> channels
