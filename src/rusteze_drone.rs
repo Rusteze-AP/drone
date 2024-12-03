@@ -306,7 +306,7 @@ impl RustezeDrone {
                 self.terminated = true;
                 // TODO Decide how to handle the crash (packets still in channel?)
             }
-            DroneCommand::RemoveSender(_) => todo!()
+            DroneCommand::RemoveSender(_) => todo!(),
         }
     }
 
@@ -415,7 +415,8 @@ impl RustezeDrone {
     fn internal_run(&mut self) {
         loop {
             if self.terminated {
-                self.logger.log_info(format!("<Drone-{}><RUNNER> - terminated", self.id).as_str());
+                self.logger
+                    .log_info(format!("<Drone-{}><RUNNER> - terminated", self.id).as_str());
                 break;
             }
             select! {
