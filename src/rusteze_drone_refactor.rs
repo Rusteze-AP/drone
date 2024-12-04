@@ -84,32 +84,41 @@ impl RustezeDrone {
         }
     }
 
+    fn check_next_hop(&mut self, current_node: NodeId, mut packet: Packet) {
+        // If current_node is wrong
+        if current_node != self.id {
+            let packet_capital = Self::getPacketType(&packet.pack_type, Format::UpperCase);
+            self.logger.log_error(
+                format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, Self::getPacketType(&packet.pack_type, Format::LowerCase), current_node).as_str()
+            );
+            if packet_capital == "FRAGMENT" {
+                // TODO - Send NACK - UnexpectedRecipient(self.id)
+            }
+            return;
+        }
+
+        // If current_node is correct
+        packet.routing_header.increment_index();
+        match packet.routing_header.get_current_hop() {
+            Some(next_node) => {
+                // TODO - Handle different packet types (fn call)
+            }
+            None => {
+                self.logger
+                    .log_error(format!("[DRONE-{}][NACK] - No next hop found", self.id).as_str());
+                // TODO - Send NACK - UnexpectedRecipient(self.id)
+            }
+        }
+    }
+
     fn generic_packet_check(&mut self, mut packet: Packet) {
         match packet.routing_header.get_current_hop() {
-            None => self
-                .logger
-                .log_error(format!("[DRONE-{}][NACK] - No current hop found", self.id).as_str()),
-            // TODO - Send NACK - UnexpetedRecipient(self.id)
-            Some(current_node) => {
-                if current_node == self.id {
-                    packet.routing_header.increment_index();
-                    match packet.routing_header.get_current_hop() {
-                        None => {
-                            // TODO - For fragment send NACK - DestinationIsDrone
-                        },
-                        Some(next_node) => {
-                            // TODO - Handle different packet types (fn call)
-                        }
-                    }
-                } else {
-                    let pt_uc = Self::getPacketType(&packet.pack_type, Format::UpperCase);
-                    self.logger.log_error(
-                        format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, pt_uc, Self::getPacketType(&packet.pack_type, Format::LowerCase), current_node).as_str()
-                    );
-                    if pt_uc == "FRAGMENT" {
-                        // TODO - Send NACK - UnexpectedRecipient(self.id)
-                    }
-                }
+            Some(current_node) => self.check_next_hop(current_node, packet),
+            None => {
+                self.logger.log_error(
+                    format!("[DRONE-{}][NACK] - No current hop found", self.id).as_str(),
+                );
+                //TODO - Send NACK - UnexpectedRecipient(self.id)
             }
         }
     }
