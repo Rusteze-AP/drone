@@ -1,4 +1,3 @@
-use crate::log_debug;
 use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use logger::Logger;
@@ -139,14 +138,14 @@ impl RustezeDrone {
                 self.flood_req_handler(flood_req);
             }
             PacketType::FloodResponse(flood_res) => {
-                log_debug!(
-                    "[Drone-{}][🟢 FLOOD RESPONSE] received flood response {:?}",
-                    self.id,
-                    flood_res
-                );
+                // log_debug!(
+                //     "[Drone-{}][🟢 FLOOD RESPONSE] received flood response {:?}",
+                //     self.id,
+                //     flood_res
+                // );
                 //TODO make fragment handler generic
                 match packet.routing_header.get_current_hop() {
-                    None => log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
+                    None => println!("placeholder"),// log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
                     Some(current_node) => {
                         if current_node == self.id {
                             packet.routing_header.increment_index();
@@ -159,7 +158,7 @@ impl RustezeDrone {
                                 },
                             );
                         } else {
-                            log_debug!("[🔴 FLOOD RESPONSE] - Flood response received by the wrong Node. Found DRONE {} at current hop. Ignoring!", current_node);
+                            // log_debug!("[🔴 FLOOD RESPONSE] - Flood response received by the wrong Node. Found DRONE {} at current hop. Ignoring!", current_node);
                         }
                     }
                 }
@@ -448,7 +447,7 @@ impl RustezeDrone {
                 sender.send(flood_res).unwrap();
             }
             None => {
-                log_debug!("Drone {} can't send flood response to {}", self.id, dest);
+                // log_debug!("Drone {} can't send flood response to {}", self.id, dest);
             }
         }
     }
@@ -480,7 +479,7 @@ impl RustezeDrone {
     fn handle_new_flood_id(&self, flood_req: FloodRequest) {
         // If drone has no neighbours except the sender of flood req
         if self.packet_senders.len() == 1 {
-            log_debug!("Drone {} has no neighbours", self.id);
+            // log_debug!("Drone {} has no neighbours", self.id);
             let (dest, msg) = Self::build_flood_response(flood_req);
             self.send_flood_response(dest, msg);
             return;
@@ -493,11 +492,11 @@ impl RustezeDrone {
             if *id == sender_id {
                 continue;
             }
-            log_debug!(
-                "Drone {} forwarding flood request to neighbour {}",
-                self.id,
-                id
-            );
+            // log_debug!(
+            //     "Drone {} forwarding flood request to neighbour {}",
+            //     self.id,
+            //     id
+            // );
 
             let msg = Packet {
                 pack_type: PacketType::FloodRequest(flood_req.clone()),
@@ -516,20 +515,20 @@ impl RustezeDrone {
         flood_req.path_trace.push((self.id, NodeType::Drone));
 
         if !self.flood_history.insert(flood_req.flood_id) {
-            log_debug!(
-                "Drone {} already received flood request {}",
-                self.id,
-                flood_req.flood_id
-            );
+            // log_debug!(
+            //     "Drone {} already received flood request {}",
+            //     self.id,
+            //     flood_req.flood_id
+            // );
             self.handle_known_flood_id(flood_req);
             return;
         }
 
-        log_debug!(
-            "Drone {} received new flood request {}",
-            self.id,
-            flood_req.flood_id
-        );
+        // log_debug!(
+        //     "Drone {} received new flood request {}",
+        //     self.id,
+        //     flood_req.flood_id
+        // );
         self.handle_new_flood_id(flood_req);
     }
 
