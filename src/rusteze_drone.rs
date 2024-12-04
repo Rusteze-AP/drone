@@ -4,7 +4,7 @@ use crossbeam::channel::{select, Receiver, Sender};
 use logger::Logger;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
-use wg_internal::controller::{DroneCommand, NodeEvent};
+use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::drone::Drone;
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{
@@ -16,7 +16,7 @@ pub struct RustezeDrone {
     pdr: f32,
     packet_senders: HashMap<NodeId, Sender<Packet>>,
     packet_recv: Receiver<Packet>,
-    controller_send: Sender<NodeEvent>,
+    controller_send: Sender<DroneEvent>,
     controller_recv: Receiver<DroneCommand>,
     terminated: bool,
 
@@ -28,7 +28,7 @@ pub struct RustezeDrone {
 impl Drone for RustezeDrone {
     fn new(
         id: NodeId,
-        controller_send: Sender<NodeEvent>,
+        controller_send: Sender<DroneEvent>,
         controller_recv: Receiver<DroneCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
@@ -535,13 +535,13 @@ impl RustezeDrone {
 
     pub fn forward_to_sm_packetSent(&self, packet: Packet) {
         self.controller_send
-            .send(NodeEvent::PacketSent(packet))
+            .send(DroneEvent::PacketSent(packet))
             .unwrap();
     }
 
     pub fn forward_to_sm_packetDropped(&self, packet: Packet) {
         self.controller_send
-            .send(NodeEvent::PacketDropped(packet))
+            .send(DroneEvent::PacketDropped(packet))
             .unwrap();
     }
 }
