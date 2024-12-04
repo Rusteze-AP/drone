@@ -52,7 +52,7 @@ impl Drone for RustezeDrone {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 enum Format {
     LowerCase,
     UpperCase,
@@ -64,7 +64,7 @@ impl RustezeDrone {
         self.id
     }
 
-    fn getPacketType(pt: &PacketType, format: Format) -> String {
+    fn get_packet_type(pt: &PacketType, format: Format) -> String {
         if format == Format::LowerCase {
             match pt {
                 PacketType::Ack(_) => "Ack".to_string(),
@@ -87,9 +87,9 @@ impl RustezeDrone {
     fn check_next_hop(&mut self, current_node: NodeId, mut packet: Packet) {
         // If current_node is wrong
         if current_node != self.id {
-            let packet_capital = Self::getPacketType(&packet.pack_type, Format::UpperCase);
+            let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
             self.logger.log_error(
-                format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, Self::getPacketType(&packet.pack_type, Format::LowerCase), current_node).as_str()
+                format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, Self::get_packet_type(&packet.pack_type, Format::LowerCase), current_node).as_str()
             );
             if packet_capital == "FRAGMENT" {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
@@ -118,7 +118,10 @@ impl RustezeDrone {
                 self.logger.log_error(
                     format!("[DRONE-{}][NACK] - No current hop found", self.id).as_str(),
                 );
-                //TODO - Send NACK - UnexpectedRecipient(self.id)
+                let pt = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
+                if pt == "FRAGMENT" {
+                    // TODO - Send NACK - UnexpectedRecipient(self.id)
+                }
             }
         }
     }
