@@ -59,7 +59,7 @@ enum Format {
 }
 
 impl RustezeDrone {
-    /// Return the NodeId of the Drone
+    /// Return the `NodeId` of the Drone
     pub fn get_id(&self) -> NodeId {
         self.id
     }
@@ -84,46 +84,47 @@ impl RustezeDrone {
         }
     }
 
-    fn check_next_hop(&mut self, current_node: NodeId, mut packet: Packet) {
+    fn check_next_hop(&mut self, current_node: NodeId, mut packet: Packet) -> Result<(), String> {
         // If current_node is wrong
         if current_node != self.id {
             let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
-            self.logger.log_error(
-                format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, Self::get_packet_type(&packet.pack_type, Format::LowerCase), current_node).as_str()
-            );
             if packet_capital == "FRAGMENT" {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
             }
-            return;
+            return Err(format!("[DRONE-{}][NACK] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, current_node));
         }
 
         // If current_node is correct
         packet.routing_header.increment_index();
         match packet.routing_header.get_current_hop() {
-            Some(next_node) => {
-                // TODO - Handle different packet types (fn call)
-            }
+            Some(next_node) => Ok(()),
             None => {
-                self.logger
-                    .log_error(format!("[DRONE-{}][NACK] - No next hop found", self.id).as_str());
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
+                Err(format!("[DRONE-{}][NACK] - No next hop found", self.id))
             }
         }
     }
 
-    fn generic_packet_check(&mut self, mut packet: Packet) {
-        match packet.routing_header.get_current_hop() {
-            Some(current_node) => self.check_next_hop(current_node, packet),
-            None => {
-                self.logger.log_error(
-                    format!("[DRONE-{}][NACK] - No current hop found", self.id).as_str(),
-                );
-                let pt = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
-                if pt == "FRAGMENT" {
-                    // TODO - Send NACK - UnexpectedRecipient(self.id)
-                }
+    fn generic_packet_check(&mut self, packet: Packet) -> Result<(), String> {
+        if let Some(current_node) = packet.routing_header.get_current_hop() {
+            self.check_next_hop(current_node, packet)
+        } else {
+            let pt = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
+            if pt == "FRAGMENT" {
+                // TODO - Send NACK - UnexpectedRecipient(self.id)
             }
+            Err(format!("[DRONE-{}][NACK] - No current hop found", self.id))
         }
+    }
+
+    fn packet_dispatcher(&mut self, packet: Packet) {
+        // Check if header is valid
+        if let Err(err) = self.generic_packet_check(packet) {
+            self.logger.log_error(err.as_str());
+            return;
+        }
+
+        // TODO - Handle different packet types (fn call)c
     }
 
     fn internal_run(&mut self) {
@@ -135,12 +136,9 @@ impl RustezeDrone {
             }
             select! {
                 recv(self.packet_recv) -> msg => {
-                    match msg {
-                        Ok(msg) => self.generic_packet_check(msg),
-                        Err(_) => {
-                            self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
-                            break;
-                        }
+                    if let Ok(msg) = msg { self.packet_dispatcher(msg) } else {
+                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
+                        break;
                     }
                 }
                 recv(self.controller_recv) -> command => {

@@ -35,7 +35,7 @@ impl RustezePacket for Packet {
 
 pub trait RustezeFragment {
     fn default() -> Self;
-    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 128]) -> Fragment;
+    fn new(fragment_index: u64, total_n_fragments: u64, length: u8, data: [u8; 128]) -> Self;
 }
 
 impl RustezeFragment for Fragment {
@@ -89,10 +89,7 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
     }
 
     fn get_current_hop(&self) -> Option<NodeId> {
-        match self.hops.get(self.hop_index) {
-            None => None,
-            Some(current) => Some(*current),
-        }
+        self.hops.get(self.hop_index).map(|current| *current)
     }
 
     fn increment_index(&mut self) {
@@ -104,16 +101,10 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
     }
 
     fn get_next_hop(&self) -> Option<NodeId> {
-        match self.hops.get(self.hop_index + 1) {
-            None => None,
-            Some(current) => Some(*current),
-        }
+        self.hops.get(self.hop_index + 1).map(|current| *current)
     }
 
     fn get_previous_hop(&self) -> Option<NodeId> {
-        match self.hops.get(self.hop_index - 1) {
-            None => None,
-            Some(current) => Some(*current),
-        }
+        self.hops.get(self.hop_index - 1).map(|current| *current)
     }
 }
