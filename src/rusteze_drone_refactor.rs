@@ -1,4 +1,3 @@
-use crate::log_debug;
 use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use logger::Logger;
@@ -84,7 +83,7 @@ impl RustezeDrone {
         }
     }
 
-    fn check_next_hop(&mut self, current_node: NodeId, mut packet: Packet) -> Result<(), String> {
+    fn check_next_hop(&mut self, current_node: NodeId, packet: &mut Packet) -> Result<(), String> {
         // If current_node is wrong
         if current_node != self.id {
             let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
@@ -105,7 +104,7 @@ impl RustezeDrone {
         }
     }
 
-    fn generic_packet_check(&mut self, packet: Packet) -> Result<(), String> {
+    fn generic_packet_check(&mut self, packet: &mut Packet) -> Result<(), String> {
         if let Some(current_node) = packet.routing_header.get_current_hop() {
             self.check_next_hop(current_node, packet)
         } else {
@@ -117,14 +116,14 @@ impl RustezeDrone {
         }
     }
 
-    fn packet_dispatcher(&mut self, packet: Packet) {
+    fn packet_dispatcher(&mut self, mut packet: Packet) {
         // Check if header is valid
-        if let Err(err) = self.generic_packet_check(packet) {
+        if let Err(err) = self.generic_packet_check(&mut packet) {
             self.logger.log_error(err.as_str());
             return;
         }
 
-        // TODO - Handle different packet types (fn call)c
+        // TODO - Handle different packet types (fn call)
     }
 
     fn internal_run(&mut self) {
