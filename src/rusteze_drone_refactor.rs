@@ -1,4 +1,4 @@
-use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
+// use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select, Receiver, Sender};
 use logger::Logger;
 use rand::Rng;
@@ -94,8 +94,8 @@ impl RustezeDrone {
         }
 
         // If current_node is correct
-        packet.routing_header.increment_index();
-        match packet.routing_header.get_current_hop() {
+        packet.routing_header.increase_hop_index();
+        match packet.routing_header.current_hop() {
             Some(next_node) => Ok(()),
             None => {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
@@ -105,7 +105,7 @@ impl RustezeDrone {
     }
 
     fn generic_packet_check(&mut self, packet: &mut Packet) -> Result<(), String> {
-        if let Some(current_node) = packet.routing_header.get_current_hop() {
+        if let Some(current_node) = packet.routing_header.current_hop() {
             self.check_next_hop(current_node, packet)
         } else {
             let pt = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
