@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{FloodRequest, FloodResponse, Fragment, Nack, NackType, Packet};
 
-fn get_sender(
+pub fn get_sender(
     node_id: Option<NodeId>,
     senders: &HashMap<NodeId, Sender<Packet>>,
 ) -> Result<Sender<Packet>, String> {
@@ -15,7 +15,7 @@ fn get_sender(
     Err("todo".to_string())
 }
 
-fn send_fragment(
+pub fn send_fragment(
     drone_id: NodeId,
     routing_header: SourceRoutingHeader,
     session_id: u64,
@@ -32,7 +32,7 @@ fn send_fragment(
     }
 }
 
-fn send_ack(
+pub fn send_ack(
     drone_id: NodeId,
     routing_header: SourceRoutingHeader,
     session_id: u64,
@@ -50,7 +50,7 @@ fn send_ack(
     }
 }
 
-fn send_nack(
+pub fn send_nack(
     drone_id: NodeId,
     routing_header: SourceRoutingHeader,
     session_id: u64,
@@ -76,7 +76,7 @@ fn send_nack(
     }
 }
 
-fn send_flood_request(
+pub fn send_flood_request(
     drone_id: NodeId,
     routing_header: SourceRoutingHeader,
     session_id: u64,
@@ -94,7 +94,7 @@ fn send_flood_request(
     }
 }
 
-fn send_flood_response(
+pub fn send_flood_response(
     drone_id: NodeId,
     routing_header: SourceRoutingHeader,
     session_id: u64,
