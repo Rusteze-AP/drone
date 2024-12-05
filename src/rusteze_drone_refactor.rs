@@ -83,14 +83,18 @@ impl RustezeDrone {
         }
     }
 
-    fn check_next_hop(&mut self, current_node: NodeId, packet: &mut Packet) -> Result<(), String> {
+    fn check_next_hop(
+        &mut self,
+        current_node: NodeId,
+        packet: &mut Packet,
+    ) -> Result<(), (String, String)> {
         // If current_node is wrong
         if current_node != self.id {
             let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
             if packet_capital == "FRAGMENT" {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
             }
-            return Err(format!("[DRONE-{}][NACK] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, current_node));
+            return Err(("".to_string(), format!("[DRONE-{}][NACK] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital, current_node)));
         }
 
         // If current_node is correct
@@ -99,12 +103,15 @@ impl RustezeDrone {
             Some(next_node) => Ok(()),
             None => {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
-                Err(format!("[DRONE-{}][NACK] - No next hop found", self.id))
+                Err((
+                    "".to_string(),
+                    format!("[DRONE-{}][NACK] - No next hop found", self.id),
+                ))
             }
         }
     }
 
-    fn generic_packet_check(&mut self, packet: &mut Packet) -> Result<(), String> {
+    fn generic_packet_check(&mut self, packet: &mut Packet) -> Result<(), (String, String)> {
         if let Some(current_node) = packet.routing_header.current_hop() {
             self.check_next_hop(current_node, packet)
         } else {
@@ -112,14 +119,17 @@ impl RustezeDrone {
             if pt == "FRAGMENT" {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
             }
-            Err(format!("[DRONE-{}][NACK] - No current hop found", self.id))
+            Err((
+                "".to_string(),
+                format!("[DRONE-{}][NACK] - No current hop found", self.id),
+            ))
         }
     }
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         // Check if header is valid
-        if let Err(err) = self.generic_packet_check(&mut packet) {
-            self.logger.log_error(err.as_str());
+        if let Err((err1, err2)) = self.generic_packet_check(&mut packet) {
+            self.logger.log_error(err1.as_str());
             return;
         }
 

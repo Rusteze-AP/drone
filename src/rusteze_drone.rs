@@ -145,7 +145,7 @@ impl RustezeDrone {
                 // );
                 //TODO make fragment handler generic
                 match packet.routing_header.get_current_hop() {
-                    None => println!("placeholder"),// log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
+                    None => println!("placeholder"), // log_debug!("[🔴 FLOOD RESPONSE] - No current hop found"),
                     Some(current_node) => {
                         if current_node == self.id {
                             packet.routing_header.increment_index();
