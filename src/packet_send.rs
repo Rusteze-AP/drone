@@ -54,7 +54,7 @@ pub fn send_nack(
     session_id: u64,
     fragment_index: u64,
     nack_type: NackType,
-    sender: Sender<Packet>,
+    sender: &Sender<Packet>,
 ) -> Result<(), String> {
     let packet = Packet::new_nack(
         routing_header,
@@ -65,13 +65,7 @@ pub fn send_nack(
         },
     );
 
-    match sender.send(packet) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!(
-            "[DRONE-{}][NACK] - Error sending nack: {}",
-            drone_id, err
-        )),
-    }
+    send_packet(drone_id, sender, packet)
 }
 
 pub fn send_flood_request(
@@ -83,13 +77,7 @@ pub fn send_flood_request(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_request(routing_header, session_id, flood_request);
 
-    match sender.send(packet) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(format!(
-            "[DRONE-{}][FLOOD REQUEST] - Error sending flood request: {}",
-            drone_id, err
-        )),
-    }
+    send_packet(drone_id, sender, packet)
 }
 
 pub fn send_flood_response(
@@ -101,11 +89,15 @@ pub fn send_flood_response(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_response(routing_header, session_id, flood_response);
 
-    match sender.send(packet) {
+    send_packet(drone_id, sender, packet)
+}
+
+pub fn send_packet(drone_id: NodeId, dest: &Sender<Packet>, packet: Packet) -> Result<(), String> {
+    match dest.send(packet.clone()) {
         Ok(_) => Ok(()),
         Err(err) => Err(format!(
-            "[DRONE-{}][FLOOD RESPONSE] - Error sending flood response: {}",
-            drone_id, err
+            "[DRONE-{}] {} | sending packet: {}",
+            drone_id, err, packet
         )),
     }
 }

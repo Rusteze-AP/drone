@@ -156,6 +156,12 @@ impl RustezeDrone {
     }
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
+        // If packet is a flood request skip checks
+        if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
+            self.handle_flood_req(flood_req);
+            return;
+        }
+
         // Check if header is valid
         let sender = self.generic_packet_check(&mut packet);
         if let Err((err1, err2)) = sender {
@@ -167,13 +173,21 @@ impl RustezeDrone {
             return;
         }
 
-        // TODO - Handle different packet types (fn call)
-        match &mut packet.pack_type {
-            PacketType::Ack(ack) => {}
-            PacketType::Nack(nack) => {}
-            PacketType::MsgFragment(fragment) => {}
-            PacketType::FloodRequest(flood_request) => self.handle_flood_req(flood_request),
-            PacketType::FloodResponse(_) => self.handle_flood_res(packet),
+        let sender = sender.unwrap();
+
+        let res = match &mut packet.pack_type {
+            PacketType::Ack(_) => self.send_ack(sender, packet),
+            PacketType::Nack(_) => self.send_nack(sender, packet),
+            PacketType::MsgFragment(fragment) => self.send_fragment(sender, packet),
+            PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
+            _ => Err(format!(
+                "[DRONE-{}][PACKET] - Unknown packet {}",
+                self.id, packet
+            )),
+        };
+
+        if let Err(err) = res {
+            self.logger.log_error(err.as_str());
         }
     }
 
@@ -226,16 +240,29 @@ impl RustezeDrone {
         (dest, msg)
     }
 
-    fn send_flood_response(&self, dest: NodeId, flood_res: Packet) {
-        match self.packet_senders.get(&dest) {
-            Some(sender) => {
-                sender.send(flood_res).unwrap();
-            }
-            None => {
-                self.logger.log_error(
-                    format!("[DRONE-{}][FLOOD RES] - Can't send to {}", self.id, dest).as_str(),
-                );
-            }
+    fn send_flood_response(&self, dest: NodeId, packet: Packet) {
+        let sender = get_sender(dest, &self.packet_senders);
+
+        if let Err(err) = sender {
+            self.logger.log_error(
+                format!(
+                    "[DRONE-{}][FLOOD RES] - Error sending flood response: {}",
+                    self.id, err
+                )
+                .as_str(),
+            );
+            return;
+        }
+
+        let sender = sender.unwrap();
+        if let Err(err) = send_packet(self.id, &sender, packet) {
+            self.logger.log_error(
+                format!(
+                    "[DRONE-{}][FLOOD RES] - Error sending flood response: {}",
+                    self.id, err
+                )
+                .as_str(),
+            );
         }
     }
 
@@ -260,16 +287,16 @@ impl RustezeDrone {
                 continue;
             }
 
-            let msg = Packet {
-                pack_type: PacketType::FloodRequest(flood_req.clone()),
-                routing_header: SourceRoutingHeader {
+            let packet = Packet::new_flood_request(
+                SourceRoutingHeader {
                     hop_index: 0,
                     hops: vec![],
                 },
-                session_id: 1,
-            };
+                1,
+                flood_req.clone(),
+            );
 
-            sx.send(msg).unwrap();
+            send_packet(self.id, sx, packet);
         }
     }
 
@@ -286,13 +313,46 @@ impl RustezeDrone {
     }
 
     /// Forward the flood response to the next hop
-    fn handle_flood_res(&self, flood_res: Packet) {
-        if let Some(dest) = flood_res.routing_header.get_current_hop() {
-            self.send_flood_response(dest, flood_res);
-            return;
-        }
+    fn handle_flood_res(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        send_packet(self.id, &dest, packet)
+    }
+}
 
-        self.logger
-            .log_error(format!("[DRONE-{}][FLOOD RES] - No next hop", self.id).as_str());
+/*ACK, NACK HANDLER */
+impl RustezeDrone {
+    fn send_ack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        send_packet(self.id, &dest, packet)
+    }
+
+    fn send_nack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        send_packet(self.id, &dest, packet)
+    }
+}
+
+/*FRAGMENT HANDLER */
+impl RustezeDrone {
+    fn to_drop(&self) -> bool {
+        let mut rng = rand::thread_rng();
+        let random_value: f32 = rng.gen();
+        self.pdr > random_value
+    }
+
+    fn send_fragment(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        if self.to_drop() {
+            let mut rev_hops = packet.routing_header.hops.clone();
+            rev_hops.reverse();
+            let source_routing_header = SourceRoutingHeader::new(rev_hops, 1);
+            let packet = Packet::new_nack(
+                source_routing_header,
+                packet.session_id,
+                Nack {
+                    fragment_index: packet.get_fragment_index(),
+                    nack_type: NackType::Dropped,
+                },
+            );
+            send_packet(self.id, &dest, packet)
+        } else {
+            send_packet(self.id, &dest, packet)
+        }
     }
 }
