@@ -4,13 +4,11 @@ use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{FloodRequest, FloodResponse, Fragment, Nack, NackType, Packet};
 
 pub fn get_sender(
-    node_id: Option<NodeId>,
+    node_id: NodeId,
     senders: &HashMap<NodeId, Sender<Packet>>,
 ) -> Result<Sender<Packet>, String> {
-    if let Some(id) = node_id {
-        if let Some(sender) = senders.get(&id) {
-            return Ok(sender.clone());
-        }
+    if let Some(sender) = senders.get(&node_id) {
+        return Ok(sender.clone());
     }
     Err("todo".to_string())
 }
