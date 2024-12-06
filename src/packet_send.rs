@@ -65,7 +65,7 @@ pub fn send_nack(
         },
     );
 
-    send_packet(drone_id, sender, packet)
+    send_packet(sender, packet)
 }
 
 pub fn send_flood_request(
@@ -77,7 +77,7 @@ pub fn send_flood_request(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_request(routing_header, session_id, flood_request);
 
-    send_packet(drone_id, sender, packet)
+    send_packet(sender, packet)
 }
 
 pub fn send_flood_response(
@@ -89,15 +89,15 @@ pub fn send_flood_response(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_response(routing_header, session_id, flood_response);
 
-    send_packet(drone_id, sender, packet)
+    send_packet(sender, packet)
 }
 
-pub fn send_packet(drone_id: NodeId, dest: &Sender<Packet>, packet: Packet) -> Result<(), String> {
+pub fn send_packet(dest: &Sender<Packet>, packet: Packet) -> Result<(), String> {
     match dest.send(packet.clone()) {
         Ok(_) => Ok(()),
         Err(err) => Err(format!(
-            "[DRONE-{}][SENDER-ERR] Tried sending packet: {} \n Error occurred: {}",
-            drone_id, packet, err
+            "Tried sending packet: {} but an error occurred: {}",
+            packet, err
         )),
     }
 }

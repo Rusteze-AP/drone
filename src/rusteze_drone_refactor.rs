@@ -157,9 +157,12 @@ impl RustezeDrone {
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         // If packet is a flood request skip checks
-        let mut res;
+        let res;
         if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
-            self.handle_flood_req(flood_req);
+            res = self.handle_flood_req(flood_req);
+            if let Err(err) = res {
+                self.logger.log_error(err.as_str());
+            }
             return;
         }
 
@@ -239,45 +242,38 @@ impl RustezeDrone {
         (dest, packet)
     }
 
-    fn send_flood_response(&self, dest: NodeId, packet: Packet) {
+    fn send_flood_response(&self, dest: NodeId, packet: Packet) -> Result<(), String> {
         let sender = get_sender(dest, &self.packet_senders);
 
         if let Err(err) = sender {
-            self.logger.log_error(
-                format!(
-                    "[DRONE-{}][FLOOD RESPONSE] - Error sending flood response: {}",
-                    self.id, err
-                )
-                .as_str(),
-            );
-            return;
+            return Err(format!(
+                "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
+                self.id, err
+            ));
         }
 
         let sender = sender.unwrap();
-        if let Err(err) = send_packet(self.id, &sender, packet) {
-            self.logger.log_error(
-                format!(
-                    "[DRONE-{}][FLOOD RESPONSE] - Error sending flood response: {}",
-                    self.id, err
-                )
-                .as_str(),
-            );
+        if let Err(err) = send_packet(&sender, packet) {
+            return Err(format!(
+                "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
+                self.id, err
+            ));
         }
+        Ok(())
     }
 
-    fn handle_known_flood_id(&self, flood_req: &FloodRequest) {
+    fn handle_known_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
         let (dest, msg) = Self::build_flood_response(flood_req);
-        self.send_flood_response(dest, msg);
+        self.send_flood_response(dest, msg)
     }
 
-    fn handle_new_flood_id(&self, flood_req: &FloodRequest) {
+    fn handle_new_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
         // If drone has no neighbours except the sender of flood req
         if self.packet_senders.len() == 1 {
             let (dest, msg) = Self::build_flood_response(flood_req);
-            self.send_flood_response(dest, msg);
-            return;
+            return self.send_flood_response(dest, msg);
         }
-
+        let mut forward_res = String::new();
         // Forward flood req to neighbours
         for (id, sx) in &self.packet_senders {
             // Skip flood req sender
@@ -295,36 +291,46 @@ impl RustezeDrone {
                 flood_req.clone(),
             );
 
-            send_packet(self.id, sx, packet);
+            let send_res = send_packet(sx, packet);
+            if let Err(err) = send_res {
+                // Concat eventual errors while forwarding flood requests
+                forward_res.push_str(&format!(
+                    "[DRONE-{}][FLOOD REQUEST] - Error occurred while forwarding flood requests to DRONE {}. \n Error: {}\n",
+                    self.id, id, err
+                ));
+            }
         }
+        if !forward_res.is_empty() {
+            return Err(forward_res);
+        }
+        Ok(())
     }
 
-    fn handle_flood_req(&mut self, flood_req: &mut FloodRequest) {
+    fn handle_flood_req(&mut self, flood_req: &mut FloodRequest) -> Result<(), String> {
         // Either case add the drone to the path trace
         flood_req.path_trace.push((self.id, NodeType::Drone));
 
         if !self.flood_history.insert(flood_req.flood_id) {
-            self.handle_known_flood_id(flood_req);
-            return;
+            return self.handle_known_flood_id(flood_req);
         }
 
-        self.handle_new_flood_id(flood_req);
+        self.handle_new_flood_id(flood_req)
     }
 
     /// Forward the flood response to the next hop
     fn handle_flood_res(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        send_packet(self.id, &dest, packet)
+        send_packet(&dest, packet)
     }
 }
 
 /*ACK, NACK HANDLER */
 impl RustezeDrone {
     fn send_ack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        send_packet(self.id, &dest, packet)
+        send_packet(&dest, packet)
     }
 
     fn send_nack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        send_packet(self.id, &dest, packet)
+        send_packet(&dest, packet)
     }
 }
 
@@ -349,9 +355,9 @@ impl RustezeDrone {
                     nack_type: NackType::Dropped,
                 },
             );
-            send_packet(self.id, &dest, packet)
+            send_packet(&dest, packet)
         } else {
-            send_packet(self.id, &dest, packet)
+            send_packet(&dest, packet)
         }
     }
 }
