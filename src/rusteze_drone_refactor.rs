@@ -53,20 +53,27 @@ impl Drone for RustezeDrone {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
-enum Format {
-    LowerCase,
-    UpperCase,
-}
-
 impl RustezeDrone {
     /// Return the `NodeId` of the Drone
     pub fn get_id(&self) -> NodeId {
         self.id
     }
 
-    fn get_packet_type(pt: &PacketType, format: Format) -> String {
-        if format == Format::LowerCase {
+    fn print_log(&self, message: Result<(), String>, packet_str: String) {
+        if let Err(err) = message {
+            self.logger.log_error(err.as_str());
+        } else {
+            self.logger.log_info(
+                format!(
+                    "[DRONE-{}][{}] - {} handled successfully",
+                    self.id, packet_str.to_ascii_uppercase(), packet_str
+                )
+                .as_str(),
+            );
+        }
+    }
+
+    fn get_packet_type(pt: &PacketType) -> String {
             match pt {
                 PacketType::Ack(_) => "Ack".to_string(),
                 PacketType::Nack(_) => "Nack".to_string(),
@@ -74,15 +81,6 @@ impl RustezeDrone {
                 PacketType::FloodResponse(_) => "Flood response".to_string(),
                 PacketType::MsgFragment(_) => "Fragment".to_string(),
             }
-        } else {
-            match pt {
-                PacketType::Ack(_) => "ACK".to_string(),
-                PacketType::Nack(_) => "NACK".to_string(),
-                PacketType::FloodRequest(_) => "FLOOD REQUEST".to_string(),
-                PacketType::FloodResponse(_) => "FLOOD REPONSE".to_string(),
-                PacketType::MsgFragment(_) => "FRAGMENT".to_string(),
-            }
-        }
     }
 
     fn check_next_hop(
@@ -90,46 +88,75 @@ impl RustezeDrone {
         current_node: NodeId,
         packet: &mut Packet,
     ) -> Result<Sender<Packet>, (String, String)> {
-        let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
+        let packet_str = Self::get_packet_type(&packet.pack_type);
         let mut send_res = "".to_string();
         // If current_node is wrong
         if current_node != self.id {
-            if packet_capital == "FRAGMENT" {
-                // TODO - Send NACK - UnexpectedRecipient(self.id)
-                // send_res = self.send_nack(sender, packet)
-                // send_res = send_nack()
+            if packet_str == "Fragment" {
+                let res = self.build_send_nack(
+                    packet.routing_header.hop_index,
+                    packet.routing_header.clone(),
+                    packet.session_id,
+                    Nack {
+                        fragment_index: packet.get_fragment_index(),
+                        nack_type: NackType::UnexpectedRecipient(self.id),
+                    },
+                );
+                if let Err(err) = res {
+                    send_res = err;
+                }
             }
-            return Err((send_res, format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital ,packet_capital, current_node)));
+            return Err((format!("[DRONE-{}][{}] - {} received by the wrong Node.\n Source routing header: {}", self.id, packet_str.to_ascii_uppercase(), packet_str, packet.routing_header), send_res));
         }
 
-        // If current_node is correct, increase hop index
+        // Increase hop index, since current_node is correct
         packet.routing_header.increase_hop_index();
-        // Check if the new hop exists
+        // Check if the new hop exists in neighbours
         match packet.routing_header.current_hop() {
             Some(next_node) => {
                 let sender_res = get_sender(next_node, &self.packet_senders);
                 match sender_res {
                     Ok(sender) => Ok(sender),
                     Err(err) => {
-                        if packet_capital == "FRAGMENT" {
-                            // TODO - Send NACK - ErrorInRouting(next_node)
-                            // send_res = send_nack()
+                        if packet_str == "Fragment" {
+                            let res = self.build_send_nack(
+                                packet.routing_header.hop_index-1,
+                                packet.routing_header.clone(),
+                                packet.session_id,
+                                Nack {
+                                    fragment_index: packet.get_fragment_index(),
+                                    nack_type: NackType::ErrorInRouting(next_node),
+                                },
+                            );
+                            if let Err(err) = res {
+                                send_res = err;
+                            }
                         }
                         Err((
+                            format!("[DRONE-{}][{}] - {err}", self.id, packet_str),
                             send_res,
-                            format!("[DRONE-{}][{}] - {err}", self.id, packet_capital),
                         ))
                     }
                 }
             }
             None => {
-                if packet_capital == "FRAGMENT" {
-                    // TODO - Send NACK - UnexpectedRecipient(self.id)
-                    // send_res = send_nack()
+                if packet_str == "Fragment" {
+                    let res = self.build_send_nack(
+                        packet.routing_header.hop_index-1,
+                        packet.routing_header.clone(),
+                        packet.session_id,
+                        Nack {
+                            fragment_index: packet.get_fragment_index(),
+                            nack_type: NackType::DestinationIsDrone,
+                        },
+                    );
+                    if let Err(err) = res {
+                        send_res = err;
+                    }
                 }
                 Err((
+                    format!("[DRONE-{}][ERR] - No next hop found", self.id),
                     send_res,
-                    format!("[DRONE-{}][NACK] - No next hop found", self.id),
                 ))
             }
         }
@@ -142,47 +169,47 @@ impl RustezeDrone {
         if let Some(current_node) = packet.routing_header.current_hop() {
             return self.check_next_hop(current_node, packet);
         } else {
-            let pt = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
-            let mut res = (
+            let pt = Self::get_packet_type(&packet.pack_type);
+            let mut send_res = (
+                format!("[DRONE-{}][ERR] - No current hop found.\n Hops: {}\n", self.id, packet.routing_header),
                 "".to_string(),
-                format!("[DRONE-{}][NACK] - No current hop found", self.id),
             );
-            if pt == "FRAGMENT" {
-                // TODO - Send NACK - UnexpectedRecipient(self.id)
-                // res.0 = send_nack()
+            if pt == "Fragment" {
+                let res = self.build_send_nack(
+                    packet.routing_header.hop_index,
+                    packet.routing_header.clone(),
+                    packet.session_id,
+                    Nack {
+                        fragment_index: packet.get_fragment_index(),
+                        nack_type: NackType::UnexpectedRecipient(self.id),
+                    },
+                );
+                if let Err(err) = res {
+                    send_res.1 = err;
+                }
             }
-            Err(res)
+            Err(send_res)
         }
     }
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
-        let packet_capital = Self::get_packet_type(&packet.pack_type, Format::UpperCase);
+        let packet_str = Self::get_packet_type(&packet.pack_type);
         // If packet is a flood request skip checks
         let res;
         if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
             res = self.handle_flood_req(flood_req);
-            if let Err(err) = res {
-                self.logger.log_error(err.as_str());
-            } else {
-                self.logger.log_info(
-                    format!(
-                        "[DRONE-{}][{}] - Flood request handled successfully",
-                        self.id, packet_capital
-                    )
-                    .as_str(),
-                );
-            }
+            self.print_log(res, packet_str);
             return;
         }
 
         // Check if header is valid
         let sender = self.generic_packet_check(&mut packet);
         if let Err((err1, err2)) = sender {
-            // Err1 used if a packet has been sent while performing the checks (an error was found)
-            if !err1.is_empty() {
+            self.logger.log_error(err1.as_str());
+            // Err2 used if a packet has been sent while performing the checks (an error was found)
+            if !err2.is_empty() {
                 self.logger.log_error(err1.as_str());
             }
-            self.logger.log_error(err2.as_str());
             return;
         }
 
@@ -202,10 +229,10 @@ impl RustezeDrone {
         if let Err(err) = res {
             self.logger.log_error(err.as_str());
         } else {
-            self.logger.log_error(
+            self.logger.log_info(
                 format!(
                     "[DRONE-{}][{}] - Packet forwarded successfully",
-                    self.id, packet_capital
+                    self.id, packet_str
                 )
                 .as_str(),
             );
@@ -363,15 +390,16 @@ impl RustezeDrone {
 
     fn build_send_nack(
         &self,
+        index : usize,
         routing_header: SourceRoutingHeader,
         session_id: u64,
         nack: Nack,
     ) -> Result<(), String> {
         // Build the Nack and reverse the packet's the route.
-        let source_routing_header = routing_header.sub_route(..routing_header.hop_index);
+        let source_routing_header = routing_header.sub_route(..index);
         if source_routing_header.is_none() {
             return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Source routing header: {:?} \n Hop index: {}",
+                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Hops: {} \n Hop index: {}",
                     self.id, routing_header, routing_header.hop_index
                 ));
         }
@@ -381,7 +409,10 @@ impl RustezeDrone {
         let packet = Packet::new_nack(source_routing_header, session_id, nack);
 
         // Retrieve the senderination (Sender) to send the Nack.
-        let sender = get_sender(routing_header.current_hop().unwrap_or(0), &self.packet_senders);
+        let sender = get_sender(
+            routing_header.current_hop().unwrap_or(0),
+            &self.packet_senders,
+        );
         if let Err(err) = sender {
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
@@ -408,7 +439,7 @@ impl RustezeDrone {
                 .sub_route(..packet.routing_header.hop_index);
             if source_routing_header.is_none() {
                 return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Source routing header: {:?} \n Hop index: {}",
+                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Hops: {} \n Hop index: {}",
                     self.id, packet.routing_header, packet.routing_header.hop_index
                 ));
             }
