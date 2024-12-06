@@ -92,8 +92,8 @@ pub fn send_flood_response(
     send_packet(sender, packet)
 }
 
-pub fn send_packet(dest: &Sender<Packet>, packet: Packet) -> Result<(), String> {
-    match dest.send(packet.clone()) {
+pub fn send_packet(sender: &Sender<Packet>, packet: Packet) -> Result<(), String> {
+    match sender.send(packet.clone()) {
         Ok(_) => Ok(()),
         Err(err) => Err(format!(
             "Tried sending packet: {} but an error occurred: {}",

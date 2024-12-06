@@ -96,7 +96,7 @@ impl RustezeDrone {
         if current_node != self.id {
             if packet_capital == "FRAGMENT" {
                 // TODO - Send NACK - UnexpectedRecipient(self.id)
-                send_res = self.send_nack(dest, packet)
+                // send_res = self.send_nack(sender, packet)
                 // send_res = send_nack()
             }
             return Err((send_res, format!("[DRONE-{}][{}] - {} received by the wrong Node. Found DRONE {} at current hop. Ignoring!", self.id, packet_capital ,packet_capital, current_node)));
@@ -245,7 +245,7 @@ impl RustezeDrone {
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
         let mut hops: Vec<NodeId> = flood_req.path_trace.iter().map(|(id, _)| *id).collect();
         hops.reverse();
-        let dest = hops[1];
+        let sender = hops[1];
 
         let packet = Packet::new_flood_response(
             SourceRoutingHeader { hop_index: 1, hops },
@@ -256,11 +256,11 @@ impl RustezeDrone {
             },
         );
 
-        (dest, packet)
+        (sender, packet)
     }
 
-    fn send_flood_response(&self, dest: NodeId, packet: Packet) -> Result<(), String> {
-        let sender = get_sender(dest, &self.packet_senders);
+    fn send_flood_response(&self, sender: NodeId, packet: Packet) -> Result<(), String> {
+        let sender = get_sender(sender, &self.packet_senders);
 
         if let Err(err) = sender {
             return Err(format!(
@@ -280,15 +280,15 @@ impl RustezeDrone {
     }
 
     fn handle_known_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
-        let (dest, msg) = Self::build_flood_response(flood_req);
-        self.send_flood_response(dest, msg)
+        let (sender, msg) = Self::build_flood_response(flood_req);
+        self.send_flood_response(sender, msg)
     }
 
     fn handle_new_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
         // If drone has no neighbours except the sender of flood req
         if self.packet_senders.len() == 1 {
-            let (dest, msg) = Self::build_flood_response(flood_req);
-            return self.send_flood_response(dest, msg);
+            let (sender, msg) = Self::build_flood_response(flood_req);
+            return self.send_flood_response(sender, msg);
         }
         let mut forward_res = String::new();
         // Forward flood req to neighbours
@@ -334,15 +334,15 @@ impl RustezeDrone {
     }
 
     /// Forward the flood response to the next hop
-    fn handle_flood_res(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        send_packet(&dest, packet)
+    fn handle_flood_res(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        send_packet(&sender, packet)
     }
 }
 
 /*ACK, NACK HANDLER */
 impl RustezeDrone {
-    fn send_ack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        if let Err(err) = send_packet(&dest, packet) {
+    fn send_ack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        if let Err(err) = send_packet(&sender, packet) {
             return Err(format!(
                 "[DRONE-{}][ACK] - Error occurred while sending ack: {}",
                 self.id, err
@@ -351,8 +351,8 @@ impl RustezeDrone {
         Ok(())
     }
 
-    fn send_nack(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        if let Err(err) = send_packet(&dest, packet) {
+    fn send_nack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
+        if let Err(err) = send_packet(&sender, packet) {
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
                 self.id, err
@@ -380,16 +380,16 @@ impl RustezeDrone {
 
         let packet = Packet::new_nack(source_routing_header, session_id, nack);
 
-        // Retrieve the destination (Sender) to send the Nack.
-        let dest = get_sender(routing_header.current_hop().unwrap_or(0), &self.packet_senders);
-        if let Err(err) = dest {
+        // Retrieve the senderination (Sender) to send the Nack.
+        let sender = get_sender(routing_header.current_hop().unwrap_or(0), &self.packet_senders);
+        if let Err(err) = sender {
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
                 self.id, err
             ));
         }
 
-        self.send_ack(dest.unwrap(), packet)
+        self.send_ack(sender.unwrap(), packet)
     }
 }
 
@@ -401,7 +401,7 @@ impl RustezeDrone {
         self.pdr > random_value
     }
 
-    fn send_fragment(&self, dest: Sender<Packet>, packet: Packet) -> Result<(), String> {
+    fn send_fragment(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if self.to_drop() {
             let source_routing_header = packet
                 .routing_header
@@ -423,7 +423,7 @@ impl RustezeDrone {
                     nack_type: NackType::Dropped,
                 },
             );
-            let res = send_packet(&dest, packet);
+            let res = send_packet(&sender, packet);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for dropped fragment: {}",
@@ -431,7 +431,7 @@ impl RustezeDrone {
                 ));
             }
         } else {
-            let res = send_packet(&dest, packet);
+            let res = send_packet(&sender, packet);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending fragment: {}",
