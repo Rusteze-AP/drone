@@ -10,7 +10,7 @@ use wg_internal::packet::{
     FloodRequest, FloodResponse, Nack, NackType, NodeType, Packet, PacketType,
 };
 
-use crate::packet_send::{get_sender, send_packet};
+use crate::packet_send::{get_sender, sc_send_packet, send_packet};
 
 pub struct RustezeDrone {
     id: NodeId,
@@ -62,6 +62,17 @@ impl RustezeDrone {
 
     fn print_log(&self, message: Result<(), String>, packet_str: String) {
         if let Err(err) = message {
+            if err == "DROPPED" {
+                self.logger.log_info(
+                    format!(
+                        "[DRONE-{}][{}] - {} dropped",
+                        self.id,
+                        packet_str.to_ascii_uppercase(),
+                        packet_str
+                    )
+                    .as_str(),
+                );
+            }
             self.logger.log_error(err.as_str());
         } else {
             self.logger.log_info(
@@ -304,7 +315,11 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
         if let Err(err) = send_packet(&sender, &packet) {
-            // sc_shortcut();
+            // Send to SC
+            let res = sc_send_packet(
+                &self.controller_send,
+                &DroneEvent::ControllerShortcut(packet),
+            );
             return Err(format!(
                 "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
                 self.id, err
@@ -375,41 +390,39 @@ impl RustezeDrone {
 
 /* DRONE EVENT */
 
-impl RustezeDrone {
-    fn sc_packet_sent() -> Result<(), String> {
-        todo!()
-    }
-
-    fn sc_packet_dropped() -> Result<(), String> {
-        todo!()
-    }
-
-    fn sc_shortcut() -> Result<(), String> {
-        todo!()
-    }
-}
+impl RustezeDrone {}
 
 /*ACK, NACK HANDLER */
 impl RustezeDrone {
     fn send_ack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
-            // sc_shortcut();
+            // Send to SC
+            let res = sc_send_packet(
+                &self.controller_send,
+                &DroneEvent::ControllerShortcut(packet),
+            );
             return Err(format!(
                 "[DRONE-{}][ACK] - Error occurred while sending ack: {}",
                 self.id, err
             ));
         }
+        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 
     fn send_nack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
-            // sc_shortcut();
+            // Send to SC
+            let res = sc_send_packet(
+                &self.controller_send,
+                &DroneEvent::ControllerShortcut(packet),
+            );
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
                 self.id, err
             ));
         }
+        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 
@@ -471,7 +484,7 @@ impl RustezeDrone {
             let mut source_routing_header = source_routing_header.unwrap();
             source_routing_header.reverse();
 
-            let packet = Packet::new_nack(
+            let nack = Packet::new_nack(
                 source_routing_header,
                 packet.session_id,
                 Nack {
@@ -479,13 +492,15 @@ impl RustezeDrone {
                     nack_type: NackType::Dropped,
                 },
             );
-            let res = self.send_nack(sender, packet);
+            let res = self.send_nack(sender, nack);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for \"to drop\" fragment: {}",
                     self.id, err
                 ));
             }
+            let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet));
+            return Err("DROPPED".to_string());
         } else {
             let res = send_packet(&sender, &packet);
             if let Err(err) = res {
@@ -495,6 +510,7 @@ impl RustezeDrone {
                 ));
             }
         }
+        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 }

@@ -1,5 +1,6 @@
 use crossbeam::channel::Sender;
 use std::collections::HashMap;
+use wg_internal::controller::DroneEvent;
 use wg_internal::network::NodeId;
 use wg_internal::packet::Packet;
 
@@ -18,6 +19,16 @@ pub fn send_packet(sender: &Sender<Packet>, packet: &Packet) -> Result<(), Strin
         Ok(()) => Ok(()),
         Err(err) => Err(format!(
             "Tried sending packet: {packet} but an error occurred: {err}"
+        )),
+    }
+}
+
+pub fn sc_send_packet(sender: &Sender<DroneEvent>, packet: &DroneEvent) -> Result<(), String> {
+    match sender.send(packet.clone()) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(format!(
+            "Error occurred while sending packet event to SC. Error: {}",
+            err
         )),
     }
 }
