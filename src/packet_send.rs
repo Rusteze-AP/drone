@@ -41,8 +41,7 @@ pub fn send_ack(
     match sender.send(packet) {
         Ok(()) => Ok(()),
         Err(err) => Err(format!(
-            "[DRONE-{}][ACK] - Error sending ack: {}",
-            drone_id, err
+            "[DRONE-{drone_id}][ACK] - Error sending ack: {err}"
         )),
     }
 }
@@ -64,7 +63,7 @@ pub fn send_nack(
         },
     );
 
-    send_packet(sender, packet)
+    send_packet(sender, &packet)
 }
 
 pub fn send_flood_request(
@@ -76,7 +75,7 @@ pub fn send_flood_request(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_request(routing_header, session_id, flood_request);
 
-    send_packet(sender, packet)
+    send_packet(sender, &packet)
 }
 
 pub fn send_flood_response(
@@ -88,10 +87,10 @@ pub fn send_flood_response(
 ) -> Result<(), String> {
     let packet = Packet::new_flood_response(routing_header, session_id, flood_response);
 
-    send_packet(sender, packet)
+    send_packet(sender, &packet)
 }
 
-pub fn send_packet(sender: &Sender<Packet>, packet: Packet) -> Result<(), String> {
+pub fn send_packet(sender: &Sender<Packet>, packet: &Packet) -> Result<(), String> {
     match sender.send(packet.clone()) {
         Ok(()) => Ok(()),
         Err(err) => Err(format!(

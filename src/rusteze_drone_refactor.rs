@@ -7,7 +7,7 @@ use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::drone::Drone;
 use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{
-    Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType,
+    FloodRequest, FloodResponse, Nack, NackType, NodeType, Packet, PacketType,
 };
 
 use crate::packet_send::{get_sender, send_packet};
@@ -67,7 +67,9 @@ impl RustezeDrone {
             self.logger.log_info(
                 format!(
                     "[DRONE-{}][{}] - {} handled successfully",
-                    self.id, packet_str.to_ascii_uppercase(), packet_str
+                    self.id,
+                    packet_str.to_ascii_uppercase(),
+                    packet_str
                 )
                 .as_str(),
             );
@@ -75,13 +77,13 @@ impl RustezeDrone {
     }
 
     fn get_packet_type(pt: &PacketType) -> String {
-            match pt {
-                PacketType::Ack(_) => "Ack".to_string(),
-                PacketType::Nack(_) => "Nack".to_string(),
-                PacketType::FloodRequest(_) => "Flood request".to_string(),
-                PacketType::FloodResponse(_) => "Flood response".to_string(),
-                PacketType::MsgFragment(_) => "Fragment".to_string(),
-            }
+        match pt {
+            PacketType::Ack(_) => "Ack".to_string(),
+            PacketType::Nack(_) => "Nack".to_string(),
+            PacketType::FloodRequest(_) => "Flood request".to_string(),
+            PacketType::FloodResponse(_) => "Flood response".to_string(),
+            PacketType::MsgFragment(_) => "Fragment".to_string(),
+        }
     }
 
     fn check_next_hop(
@@ -107,7 +109,16 @@ impl RustezeDrone {
                     send_res = err;
                 }
             }
-            return Err((format!("[DRONE-{}][{}] - {} received by the wrong Node.\n Source routing header: {}", self.id, packet_str.to_ascii_uppercase(), packet_str, packet.routing_header), send_res));
+            return Err((
+                format!(
+                    "[DRONE-{}][{}] - {} received by the wrong Node.\n Source routing header: {}",
+                    self.id,
+                    packet_str.to_ascii_uppercase(),
+                    packet_str,
+                    packet.routing_header
+                ),
+                send_res,
+            ));
         }
 
         // Increase hop index, since current_node is correct
@@ -121,7 +132,7 @@ impl RustezeDrone {
                     Err(err) => {
                         if packet_str == "Fragment" {
                             let res = self.build_send_nack(
-                                packet.routing_header.hop_index-1,
+                                packet.routing_header.hop_index - 1,
                                 packet.routing_header.clone(),
                                 packet.session_id,
                                 Nack {
@@ -143,7 +154,7 @@ impl RustezeDrone {
             None => {
                 if packet_str == "Fragment" {
                     let res = self.build_send_nack(
-                        packet.routing_header.hop_index-1,
+                        packet.routing_header.hop_index - 1,
                         packet.routing_header.clone(),
                         packet.session_id,
                         Nack {
@@ -169,28 +180,31 @@ impl RustezeDrone {
     ) -> Result<Sender<Packet>, (String, String)> {
         if let Some(current_node) = packet.routing_header.current_hop() {
             return self.check_next_hop(current_node, packet);
-        } else {
-            let pt = Self::get_packet_type(&packet.pack_type);
-            let mut send_res = (
-                format!("[DRONE-{}][ERR] - No current hop found.\n Hops: {}\n", self.id, packet.routing_header),
-                "".to_string(),
-            );
-            if pt == "Fragment" {
-                let res = self.build_send_nack(
-                    packet.routing_header.hop_index,
-                    packet.routing_header.clone(),
-                    packet.session_id,
-                    Nack {
-                        fragment_index: packet.get_fragment_index(),
-                        nack_type: NackType::UnexpectedRecipient(self.id),
-                    },
-                );
-                if let Err(err) = res {
-                    send_res.1 = err;
-                }
-            }
-            Err(send_res)
         }
+
+        let pt = Self::get_packet_type(&packet.pack_type);
+        let mut send_res = (
+            format!(
+                "[DRONE-{}][ERR] - No current hop found.\n Hops: {}\n",
+                self.id, packet.routing_header
+            ),
+            String::new(),
+        );
+        if pt == "Fragment" {
+            let res = self.build_send_nack(
+                packet.routing_header.hop_index,
+                packet.routing_header.clone(),
+                packet.session_id,
+                Nack {
+                    fragment_index: packet.get_fragment_index(),
+                    nack_type: NackType::UnexpectedRecipient(self.id),
+                },
+            );
+            if let Err(err) = res {
+                send_res.1 = err;
+            }
+        }
+        Err(send_res)
     }
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
@@ -221,7 +235,7 @@ impl RustezeDrone {
             PacketType::Nack(_) => self.send_nack(sender, packet),
             PacketType::MsgFragment(_) => self.send_fragment(sender, packet),
             PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
-            _ => Err(format!(
+            PacketType::FloodRequest(_) => Err(format!(
                 "[DRONE-{}][PACKET] - Unknown packet {}",
                 self.id, packet
             )),
@@ -258,7 +272,7 @@ impl RustezeDrone {
                 }
                 recv(self.packet_recv) -> msg => {
                     if let Ok(msg) = msg {
-                        self.packet_dispatcher(msg)
+                        self.packet_dispatcher(msg);
                     } else {
                         self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
                         break;
@@ -299,7 +313,7 @@ impl RustezeDrone {
         }
 
         let sender = sender.unwrap();
-        if let Err(err) = send_packet(&sender, packet) {
+        if let Err(err) = send_packet(&sender, &packet) {
             return Err(format!(
                 "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
                 self.id, err
@@ -337,7 +351,7 @@ impl RustezeDrone {
                 flood_req.clone(),
             );
 
-            if let Err(err) = send_packet(sx, packet) {
+            if let Err(err) = send_packet(sx, &packet) {
                 // Concat eventual errors while forwarding flood requests
                 forward_res.push_str(&format!(
                     "[DRONE-{}][FLOOD REQUEST] - Error occurred while forwarding flood requests to DRONE {}. \n Error: {}\n",
@@ -364,14 +378,14 @@ impl RustezeDrone {
 
     /// Forward the flood response to the next hop
     fn handle_flood_res(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        send_packet(&sender, packet)
+        send_packet(&sender, &packet)
     }
 }
 
 /*ACK, NACK HANDLER */
 impl RustezeDrone {
     fn send_ack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        if let Err(err) = send_packet(&sender, packet) {
+        if let Err(err) = send_packet(&sender, &packet) {
             return Err(format!(
                 "[DRONE-{}][ACK] - Error occurred while sending ack: {}",
                 self.id, err
@@ -381,7 +395,7 @@ impl RustezeDrone {
     }
 
     fn send_nack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
-        if let Err(err) = send_packet(&sender, packet) {
+        if let Err(err) = send_packet(&sender, &packet) {
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
                 self.id, err
@@ -392,7 +406,7 @@ impl RustezeDrone {
 
     fn build_send_nack(
         &self,
-        index : usize,
+        index: usize,
         routing_header: SourceRoutingHeader,
         session_id: u64,
         nack: Nack,
@@ -456,7 +470,7 @@ impl RustezeDrone {
                     nack_type: NackType::Dropped,
                 },
             );
-            let res = send_packet(&sender, packet);
+            let res = send_packet(&sender, &packet);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for dropped fragment: {}",
@@ -464,7 +478,7 @@ impl RustezeDrone {
                 ));
             }
         } else {
-            let res = send_packet(&sender, packet);
+            let res = send_packet(&sender, &packet);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending fragment: {}",
@@ -478,9 +492,8 @@ impl RustezeDrone {
 
 /*COMMANDS HANDLER */
 impl RustezeDrone {
-    fn set_pdr(&mut self, new_pdr: f32) -> Result<(), String> {
+    fn set_pdr(&mut self, new_pdr: f32) {
         self.pdr = new_pdr;
-        Ok(())
     }
 
     fn remove_sender(&mut self, node_id: NodeId) -> Result<(), String> {
@@ -517,7 +530,10 @@ impl RustezeDrone {
         let res = match command {
             DroneCommand::RemoveSender(node_id) => self.remove_sender(node_id),
             DroneCommand::AddSender(id, sender) => self.add_sender(id, sender),
-            DroneCommand::SetPacketDropRate(new_pdr) => self.set_pdr(new_pdr),
+            DroneCommand::SetPacketDropRate(new_pdr) => {
+                self.set_pdr(new_pdr);
+                Ok(())
+            }
             DroneCommand::Crash => self.crash(),
         };
 
