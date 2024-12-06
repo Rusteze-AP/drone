@@ -157,6 +157,7 @@ impl RustezeDrone {
 
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         // If packet is a flood request skip checks
+        let mut res;
         if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
             self.handle_flood_req(flood_req);
             return;
@@ -175,10 +176,10 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
 
-        let res = match &mut packet.pack_type {
+        res = match &mut packet.pack_type {
             PacketType::Ack(_) => self.send_ack(sender, packet),
             PacketType::Nack(_) => self.send_nack(sender, packet),
-            PacketType::MsgFragment(fragment) => self.send_fragment(sender, packet),
+            PacketType::MsgFragment(_) => self.send_fragment(sender, packet),
             PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
             _ => Err(format!(
                 "[DRONE-{}][PACKET] - Unknown packet {}",
@@ -226,18 +227,16 @@ impl RustezeDrone {
         hops.reverse();
         let dest = hops[1];
 
-        let flood_res = FloodResponse {
-            flood_id: flood_req.flood_id,
-            path_trace: flood_req.path_trace.clone(),
-        };
-        let srh = SourceRoutingHeader { hop_index: 1, hops };
-        let msg = Packet {
-            pack_type: PacketType::FloodResponse(flood_res),
-            routing_header: srh,
-            session_id: 1,
-        };
+        let packet = Packet::new_flood_response(
+            SourceRoutingHeader { hop_index: 1, hops },
+            1, // TODO - does it need to be retrieved from the flood request?
+            FloodResponse {
+                flood_id: flood_req.flood_id,
+                path_trace: flood_req.path_trace.clone(),
+            },
+        );
 
-        (dest, msg)
+        (dest, packet)
     }
 
     fn send_flood_response(&self, dest: NodeId, packet: Packet) {
@@ -246,7 +245,7 @@ impl RustezeDrone {
         if let Err(err) = sender {
             self.logger.log_error(
                 format!(
-                    "[DRONE-{}][FLOOD RES] - Error sending flood response: {}",
+                    "[DRONE-{}][FLOOD RESPONSE] - Error sending flood response: {}",
                     self.id, err
                 )
                 .as_str(),
@@ -258,7 +257,7 @@ impl RustezeDrone {
         if let Err(err) = send_packet(self.id, &sender, packet) {
             self.logger.log_error(
                 format!(
-                    "[DRONE-{}][FLOOD RES] - Error sending flood response: {}",
+                    "[DRONE-{}][FLOOD RESPONSE] - Error sending flood response: {}",
                     self.id, err
                 )
                 .as_str(),

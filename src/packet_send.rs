@@ -10,7 +10,7 @@ pub fn get_sender(
     if let Some(sender) = senders.get(&node_id) {
         return Ok(sender.clone());
     }
-    Err("todo".to_string())
+    Err(format!("No neigbour of ID [{}] found.", node_id))
 }
 
 pub fn send_fragment(
@@ -96,8 +96,8 @@ pub fn send_packet(drone_id: NodeId, dest: &Sender<Packet>, packet: Packet) -> R
     match dest.send(packet.clone()) {
         Ok(_) => Ok(()),
         Err(err) => Err(format!(
-            "[DRONE-{}] {} | sending packet: {}",
-            drone_id, err, packet
+            "[DRONE-{}][SENDER-ERR] Tried sending packet: {} \n Error occurred: {}",
+            drone_id, packet, err
         )),
     }
 }
