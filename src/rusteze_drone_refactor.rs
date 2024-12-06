@@ -66,7 +66,7 @@ impl RustezeDrone {
         } else {
             self.logger.log_info(
                 format!(
-                    "[DRONE-{}][{}] - {} handled successfully",
+                    "[DRONE-{}][{}] - {} forwarded successfully",
                     self.id,
                     packet_str.to_ascii_uppercase(),
                     packet_str
@@ -241,17 +241,7 @@ impl RustezeDrone {
             )),
         };
 
-        if let Err(err) = res {
-            self.logger.log_error(err.as_str());
-        } else {
-            self.logger.log_info(
-                format!(
-                    "[DRONE-{}][{}] - Packet forwarded successfully",
-                    self.id, packet_str
-                )
-                .as_str(),
-            );
-        }
+        self.print_log(res, packet_str);
     }
 
     fn internal_run(&mut self) {
@@ -314,6 +304,7 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
         if let Err(err) = send_packet(&sender, &packet) {
+            // sc_shortcut();
             return Err(format!(
                 "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
                 self.id, err
@@ -382,10 +373,27 @@ impl RustezeDrone {
     }
 }
 
+/* DRONE EVENT */
+
+impl RustezeDrone {
+    fn sc_packet_sent() -> Result<(), String> {
+        todo!()
+    }
+
+    fn sc_packet_dropped() -> Result<(), String> {
+        todo!()
+    }
+
+    fn sc_shortcut() -> Result<(), String> {
+        todo!()
+    }
+}
+
 /*ACK, NACK HANDLER */
 impl RustezeDrone {
     fn send_ack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
+            // sc_shortcut();
             return Err(format!(
                 "[DRONE-{}][ACK] - Error occurred while sending ack: {}",
                 self.id, err
@@ -396,6 +404,7 @@ impl RustezeDrone {
 
     fn send_nack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
+            // sc_shortcut();
             return Err(format!(
                 "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
                 self.id, err
@@ -470,10 +479,10 @@ impl RustezeDrone {
                     nack_type: NackType::Dropped,
                 },
             );
-            let res = send_packet(&sender, &packet);
+            let res = self.send_nack(sender, packet);
             if let Err(err) = res {
                 return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for dropped fragment: {}",
+                    "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for \"to drop\" fragment: {}",
                     self.id, err
                 ));
             }
