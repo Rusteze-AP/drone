@@ -89,7 +89,7 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
     }
 
     fn get_current_hop(&self) -> Option<NodeId> {
-        self.hops.get(self.hop_index).map(|current| *current)
+        self.hops.get(self.hop_index).copied()
     }
 
     fn increment_index(&mut self) {
@@ -101,10 +101,10 @@ impl RustezeSourceRoutingHeader for SourceRoutingHeader {
     }
 
     fn get_next_hop(&self) -> Option<NodeId> {
-        self.hops.get(self.hop_index + 1).map(|current| *current)
+        self.hops.get(self.hop_index + 1).copied()
     }
 
     fn get_previous_hop(&self) -> Option<NodeId> {
-        self.hops.get(self.hop_index - 1).map(|current| *current)
+        self.hops.get(self.hop_index - 1).copied()
     }
 }

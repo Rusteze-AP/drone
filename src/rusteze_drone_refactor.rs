@@ -1,5 +1,5 @@
 // use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
-use crossbeam::channel::{select, Receiver, Sender};
+use crossbeam::channel::{select_biased, Receiver, Sender};
 use logger::Logger;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
@@ -10,7 +10,7 @@ use wg_internal::packet::{
     Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType,
 };
 
-use crate::packet_send::*;
+use crate::packet_send::{get_sender, send_packet};
 
 pub struct RustezeDrone {
     id: NodeId,
@@ -55,6 +55,7 @@ impl Drone for RustezeDrone {
 
 impl RustezeDrone {
     /// Return the `NodeId` of the Drone
+    #[must_use]
     pub fn get_id(&self) -> NodeId {
         self.id
     }
@@ -89,7 +90,7 @@ impl RustezeDrone {
         packet: &mut Packet,
     ) -> Result<Sender<Packet>, (String, String)> {
         let packet_str = Self::get_packet_type(&packet.pack_type);
-        let mut send_res = "".to_string();
+        let mut send_res = String::new();
         // If current_node is wrong
         if current_node != self.id {
             if packet_str == "Fragment" {
@@ -246,19 +247,20 @@ impl RustezeDrone {
                     .log_info(format!("[DRONE-{}][RUNNER] - Terminated", self.id).as_str());
                 break;
             }
-            select! {
-                recv(self.packet_recv) -> msg => {
-                    if let Ok(msg) = msg { self.packet_dispatcher(msg) } else {
-                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
+            select_biased! {
+                recv(self.controller_recv) -> command => {
+                    if let Ok(command) = command {
+                        self.command_dispatcher(command);
+                    } else {
+                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Simulation controller receiver disconnected. Terminating thread...", self.id).as_str());
                         break;
                     }
                 }
-                recv(self.controller_recv) -> command => {
-                    if let Ok(command) = command {
-                        self.logger.log_info(format!("[Drone-{}][RUNNER] - Received message from controller", self.id).as_str());
-                        // self.execute_command(command);
+                recv(self.packet_recv) -> msg => {
+                    if let Ok(msg) = msg {
+                        self.packet_dispatcher(msg)
                     } else {
-                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Simulation controller receiver disconnected. Terminating thread...", self.id).as_str());
+                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
                         break;
                     }
                 }
@@ -471,5 +473,56 @@ impl RustezeDrone {
             }
         }
         Ok(())
+    }
+}
+
+/*COMMANDS HANDLER */
+impl RustezeDrone {
+    fn set_pdr(&mut self, new_pdr: f32) -> Result<(), String> {
+        self.pdr = new_pdr;
+        Ok(())
+    }
+
+    fn remove_sender(&mut self, node_id: NodeId) -> Result<(), String> {
+        let res = self.packet_senders.remove(&node_id);
+        if res.is_none() {
+            Err(format!(
+                "[DRONE-{}][REMOVE SENDER] - Sender with id {} not found",
+                self.id, node_id
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn add_sender(&mut self, id: NodeId, sender: Sender<Packet>) -> Result<(), String> {
+        let res = self.packet_senders.insert(id, sender);
+        if res.is_some() {
+            Err(format!(
+                "[DRONE-{}][ADD SENDER] - Sender with id {} already exists",
+                self.id, id
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn crash(&mut self) -> Result<(), String> {
+        //TODO handle drone crash
+        self.terminated = true;
+        Ok(())
+    }
+
+    fn command_dispatcher(&mut self, command: DroneCommand) {
+        let res = match command {
+            DroneCommand::RemoveSender(node_id) => self.remove_sender(node_id),
+            DroneCommand::AddSender(id, sender) => self.add_sender(id, sender),
+            DroneCommand::SetPacketDropRate(new_pdr) => self.set_pdr(new_pdr),
+            DroneCommand::Crash => self.crash(),
+        };
+
+        if let Err(err) = res {
+            self.logger.log_error(err.as_str());
+        }
     }
 }

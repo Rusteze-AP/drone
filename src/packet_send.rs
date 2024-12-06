@@ -10,7 +10,7 @@ pub fn get_sender(
     if let Some(sender) = senders.get(&node_id) {
         return Ok(sender.clone());
     }
-    Err(format!("No neigbour of ID [{}] found.", node_id))
+    Err(format!("No neigbour of ID [{node_id}] found."))
 }
 
 pub fn send_fragment(
@@ -22,10 +22,9 @@ pub fn send_fragment(
 ) -> Result<(), String> {
     let packet = Packet::new_fragment(routing_header, session_id, fragment);
     match sender.send(packet) {
-        Ok(_) => Ok(()),
+        Ok(()) => Ok(()),
         Err(err) => Err(format!(
-            "[DRONE-{}][FRAGMENT] - Error sending fragment: {}",
-            drone_id, err
+            "[DRONE-{drone_id}][FRAGMENT] - Error sending fragment: {err}"
         )),
     }
 }
@@ -40,7 +39,7 @@ pub fn send_ack(
     let packet = Packet::new_ack(routing_header, session_id, fragment_index);
 
     match sender.send(packet) {
-        Ok(_) => Ok(()),
+        Ok(()) => Ok(()),
         Err(err) => Err(format!(
             "[DRONE-{}][ACK] - Error sending ack: {}",
             drone_id, err
@@ -94,10 +93,9 @@ pub fn send_flood_response(
 
 pub fn send_packet(sender: &Sender<Packet>, packet: Packet) -> Result<(), String> {
     match sender.send(packet.clone()) {
-        Ok(_) => Ok(()),
+        Ok(()) => Ok(()),
         Err(err) => Err(format!(
-            "Tried sending packet: {} but an error occurred: {}",
-            packet, err
+            "Tried sending packet: {packet} but an error occurred: {err}"
         )),
     }
 }
