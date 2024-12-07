@@ -107,9 +107,9 @@ impl RustezeDrone {
         let mut send_res = String::new();
         // If current_node is wrong
         if current_node != self.id {
-            if packet_str == "Fragment" {
+            if let PacketType::FloodRequest(_) = &packet.pack_type {
                 let res = self.build_send_nack(
-                    packet.routing_header.hop_index,
+                    packet.routing_header.hop_index + 1,
                     packet.routing_header.clone(),
                     packet.session_id,
                     Nack {
@@ -142,9 +142,9 @@ impl RustezeDrone {
                 match sender_res {
                     Ok(sender) => Ok(sender),
                     Err(err) => {
-                        if packet_str == "Fragment" {
+                        if let PacketType::FloodRequest(_) = &packet.pack_type {
                             let res = self.build_send_nack(
-                                packet.routing_header.hop_index - 1,
+                                packet.routing_header.hop_index,
                                 packet.routing_header.clone(),
                                 packet.session_id,
                                 Nack {
@@ -164,9 +164,9 @@ impl RustezeDrone {
                 }
             }
             None => {
-                if packet_str == "Fragment" {
+                if let PacketType::FloodRequest(_) = &packet.pack_type {
                     let res = self.build_send_nack(
-                        packet.routing_header.hop_index - 1,
+                        packet.routing_header.hop_index,
                         packet.routing_header.clone(),
                         packet.session_id,
                         Nack {
@@ -431,7 +431,7 @@ impl RustezeDrone {
     /// It will reverse the packet route and forward it.
     ///
     /// # Arguments
-    /// * `index` - The index at which to split the route (likely current_node). 
+    /// * `index` - The index at which to split the route (excluded).
     /// * `routing_header` - The current routing header of the packet.
     /// * `session_id` - The session id of the packet.
     /// * `nack` - The Nack packet to be sent.
@@ -450,10 +450,10 @@ impl RustezeDrone {
                     self.id, routing_header, routing_header.hop_index
                 ));
         }
-        
+
         let mut new_routing_header = source_routing_header.unwrap();
-        new_routing_header.hop_index = 0;
-        new_routing_header.reverse();
+        new_routing_header.hops.reverse(); // Reverse in place
+        new_routing_header.hop_index = 1; // Set hop_index to 1 (next hop)
 
         let packet = Packet::new_nack(new_routing_header.clone(), session_id, nack);
 
@@ -463,10 +463,7 @@ impl RustezeDrone {
             &self.packet_senders,
         );
         if let Err(err) = sender {
-            return Err(format!(
-                "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
-                self.id, err
-            ));
+            return Err(format!("{}", err));
         }
         // let sender = sender.unwrap();
         if let Err(err) = send_packet(&sender.unwrap(), &packet) {
@@ -475,15 +472,10 @@ impl RustezeDrone {
                 &self.controller_send,
                 &DroneEvent::ControllerShortcut(packet),
             );
-            return Err(format!(
-                "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
-                self.id, err
-            ));
+            return Err(format!("Error occurred while sending nack: {}", err));
         }
         let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet));
         Ok(())
-
-
     }
 }
 
