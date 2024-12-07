@@ -1,12 +1,15 @@
 use crossbeam::channel::unbounded;
 use std::collections::HashMap;
 use std::thread;
+use std::time::Duration;
 use wg_internal::controller::DroneEvent;
 use wg_internal::drone::Drone;
 use wg_internal::network::SourceRoutingHeader;
 use wg_internal::packet::{Fragment, Nack, NackType, Packet, PacketType};
 
-/* THE FOLLOWING TESTS ARE TO CHECK IF YOUR DRONE IS HANDLING CORRECTLY PACKETS (FRAGMENT) */
+/* THE FOLLOWING TESTS CHECKS IF YOUR DRONE IS HANDLING CORRECTLY PACKETS (FRAGMENT) */
+
+const TIMEOUT: Duration = Duration::from_millis(400);
 
 /// Creates a sample packet for testing purposes. For convenience, using 1-10 for clients, 11-20 for drones and 21-30 for servers
 fn create_sample_packet() -> Packet {
@@ -26,6 +29,7 @@ fn create_sample_packet() -> Packet {
 }
 
 /// This function is used to test the packet forward functionality of a drone.
+/// The assert consists in checking if the "client" and "SC" receive the correct packet.
 pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
     // Drone 11
     let (d_send, d_recv) = unbounded();
@@ -33,10 +37,11 @@ pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
     let (d2_send, d2_recv) = unbounded::<Packet>();
     // SC commands
     let (_d_command_send, d_command_recv) = unbounded();
+    let (d_event_send, d_event_recv) = unbounded();
 
     let mut drone = T::new(
         11,
-        unbounded().0,
+        d_event_send,
         d_command_recv,
         d_recv.clone(),
         HashMap::from([(12, d2_send.clone())]),
@@ -54,10 +59,15 @@ pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
     msg.routing_header.hop_index = 2;
 
     // d2 receives packet from d1
-    assert_eq!(d2_recv.recv().unwrap(), msg);
+    assert_eq!(d2_recv.recv_timeout(TIMEOUT).unwrap(), msg);
+    // SC listen for event from the drone
+    assert_eq!(
+        d_event_recv.recv_timeout(TIMEOUT).unwrap(),
+        DroneEvent::PacketSent(msg)
+    );
 }
 
-/// Checks if the packet is dropped by one drone. The assert consists in checking if the "client" and "SC" receives the correct packet.
+/// Checks if the packet is dropped by one drone. The assert consists in checking if the "client" and "SC" receive the correct packet.
 pub fn generic_fragment_drop<T: Drone + Send + 'static>() {
     // Client 1
     let (c_send, c_recv) = unbounded();
@@ -101,11 +111,11 @@ pub fn generic_fragment_drop<T: Drone + Send + 'static>() {
     );
 
     // Client listens for packet from the drone (Dropped Nack)
-    assert_eq!(c_recv.recv().unwrap(), nack_packet);
+    assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), nack_packet);
     // SC listen for event from the drone
     assert_eq!(
-        d_event_recv.recv().unwrap(),
-        DroneEvent::PacketDropped(nack_packet)
+        d_event_recv.recv_timeout(TIMEOUT).unwrap(),
+        DroneEvent::PacketDropped(msg)
     );
 }
 
@@ -157,9 +167,9 @@ pub fn generic_chain_fragment_drop<T: Drone + Send + 'static>() {
     // "Client" sends packet to the drone
     d_send.send(msg.clone()).unwrap();
 
-    // Client receive an NACK originated from 'd2'
+    // Client receives an NACK originated from 'd2'
     assert_eq!(
-        c_recv.recv().unwrap(),
+        c_recv.recv_timeout(TIMEOUT).unwrap(),
         Packet {
             pack_type: PacketType::Nack(Nack {
                 fragment_index: 1,
@@ -187,11 +197,12 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
     let (d12_send, d12_recv) = unbounded();
     // SC - needed to not make the drone crash
     let (_d_command_send, d_command_recv) = unbounded();
+    let (d_event_send, _d_event_recv) = unbounded();
 
     // Drone 11
     let mut drone = T::new(
         11,
-        unbounded().0,
+        d_event_send.clone(),
         d_command_recv.clone(),
         d_recv,
         HashMap::from([(12, d12_send.clone()), (1, c_send.clone())]),
@@ -200,7 +211,7 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
     // Drone 12
     let mut drone2 = T::new(
         12,
-        unbounded().0,
+        d_event_send.clone(),
         d_command_recv.clone(),
         d12_recv,
         HashMap::from([(11, d_send.clone()), (21, s_send.clone())]),
@@ -223,7 +234,7 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
 
     msg.routing_header.hop_index = 3;
     // Server receives the fragment
-    assert_eq!(s_recv.recv().unwrap(), msg);
+    assert_eq!(s_recv.recv_timeout(TIMEOUT).unwrap(), msg);
 
     // Server sends an ACK
     d12_send
@@ -239,7 +250,7 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
 
     // Client receives an ACK originated from 's'
     assert_eq!(
-        c_recv.recv().unwrap(),
+        c_recv.recv_timeout(TIMEOUT).unwrap(),
         Packet::new_ack(
             SourceRoutingHeader {
                 hop_index: 3,

@@ -219,7 +219,6 @@ impl RustezeDrone {
         Err(send_res)
     }
 
-
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         let packet_str = Self::get_packet_type(&packet.pack_type);
         // If packet is a flood request skip checks
@@ -230,7 +229,7 @@ impl RustezeDrone {
                 self.print_log(res, packet_str);
                 return;
             }
-     }
+        }
 
         // Check if header is valid
         let sender = self.generic_packet_check(&mut packet);
@@ -249,27 +248,28 @@ impl RustezeDrone {
             PacketType::Ack(_) => self.send_ack(sender, packet),
             PacketType::Nack(_) => self.send_nack(sender, packet),
             PacketType::MsgFragment(_) => {
-                if !self.terminated{
+                if !self.terminated {
                     self.send_fragment(sender, packet)
-                }else {
-                    self.build_send_nack(                
+                } else {
+                    self.build_send_nack(
                         packet.routing_header.hop_index,
-        packet.routing_header.clone(),
+                        packet.routing_header.clone(),
                         packet.session_id,
                         Nack {
                             fragment_index: packet.get_fragment_index(),
                             nack_type: NackType::ErrorInRouting(self.id),
-                        },)
+                        },
+                    )
                 }
-            },
+            }
             PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
             PacketType::FloodRequest(_) => {
-                if !self.terminated{
+                if !self.terminated {
                     Err(format!(
                         "[DRONE-{}][PACKET] - Unknown packet {}",
                         self.id, packet
                     ))
-                }else{
+                } else {
                     Ok(())
                 }
             }
