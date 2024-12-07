@@ -219,15 +219,18 @@ impl RustezeDrone {
         Err(send_res)
     }
 
+
     fn packet_dispatcher(&mut self, mut packet: Packet) {
         let packet_str = Self::get_packet_type(&packet.pack_type);
         // If packet is a flood request skip checks
         let res;
-        if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
-            res = self.handle_flood_req(flood_req);
-            self.print_log(res, packet_str);
-            return;
-        }
+        if !self.terminated {
+            if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
+                res = self.handle_flood_req(flood_req);
+                self.print_log(res, packet_str);
+                return;
+            }
+     }
 
         // Check if header is valid
         let sender = self.generic_packet_check(&mut packet);
@@ -245,12 +248,31 @@ impl RustezeDrone {
         res = match &mut packet.pack_type {
             PacketType::Ack(_) => self.send_ack(sender, packet),
             PacketType::Nack(_) => self.send_nack(sender, packet),
-            PacketType::MsgFragment(_) => self.send_fragment(sender, packet),
+            PacketType::MsgFragment(_) => {
+                if !self.terminated{
+                    self.send_fragment(sender, packet)
+                }else {
+                    self.build_send_nack(                
+                        packet.routing_header.hop_index,
+        packet.routing_header.clone(),
+                        packet.session_id,
+                        Nack {
+                            fragment_index: packet.get_fragment_index(),
+                            nack_type: NackType::ErrorInRouting(self.id),
+                        },)
+                }
+            },
             PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
-            PacketType::FloodRequest(_) => Err(format!(
-                "[DRONE-{}][PACKET] - Unknown packet {}",
-                self.id, packet
-            )),
+            PacketType::FloodRequest(_) => {
+                if !self.terminated{
+                    Err(format!(
+                        "[DRONE-{}][PACKET] - Unknown packet {}",
+                        self.id, packet
+                    ))
+                }else{
+                    Ok(())
+                }
+            }
         };
 
         self.print_log(res, packet_str);
@@ -556,18 +578,20 @@ impl RustezeDrone {
     }
 
     fn command_dispatcher(&mut self, command: DroneCommand) {
-        let res = match command {
-            DroneCommand::RemoveSender(node_id) => self.remove_sender(node_id),
-            DroneCommand::AddSender(id, sender) => self.add_sender(id, sender),
-            DroneCommand::SetPacketDropRate(new_pdr) => {
-                self.set_pdr(new_pdr);
-                Ok(())
-            }
-            DroneCommand::Crash => self.crash(),
-        };
+        if !self.terminated {
+            let res = match command {
+                DroneCommand::RemoveSender(node_id) => self.remove_sender(node_id),
+                DroneCommand::AddSender(id, sender) => self.add_sender(id, sender),
+                DroneCommand::SetPacketDropRate(new_pdr) => {
+                    self.set_pdr(new_pdr);
+                    Ok(())
+                }
+                DroneCommand::Crash => self.crash(),
+            };
 
-        if let Err(err) = res {
-            self.logger.log_error(err.as_str());
+            if let Err(err) = res {
+                self.logger.log_error(err.as_str());
+            }
         }
     }
 }
