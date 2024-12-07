@@ -63,7 +63,7 @@ impl RustezeDrone {
     fn print_log(&self, message: Result<(), String>, packet_str: String) {
         if let Err(err) = message {
             if err == "DROPPED" {
-                self.logger.log_info(
+                self.logger.log_debug(
                     format!(
                         "[DRONE-{}][{}] - {} dropped",
                         self.id,
@@ -72,10 +72,11 @@ impl RustezeDrone {
                     )
                     .as_str(),
                 );
+            } else {
+                self.logger.log_error(err.as_str());
             }
-            self.logger.log_error(err.as_str());
         } else {
-            self.logger.log_info(
+            self.logger.log_debug(
                 format!(
                     "[DRONE-{}][{}] - {} forwarded successfully",
                     self.id,
@@ -259,7 +260,7 @@ impl RustezeDrone {
         loop {
             if self.terminated {
                 self.logger
-                    .log_info(format!("[DRONE-{}][RUNNER] - Terminated", self.id).as_str());
+                    .log_debug(format!("[DRONE-{}][RUNNER] - Terminated", self.id).as_str());
                 break;
             }
             select_biased! {
@@ -426,6 +427,14 @@ impl RustezeDrone {
         Ok(())
     }
 
+    /// This function builds a Nack packet that needs to be forwarded back to its source.
+    /// It will reverse the packet route and forward it.
+    ///
+    /// # Arguments
+    /// * `index` - The index at which to split the route (likely current_node). 
+    /// * `routing_header` - The current routing header of the packet.
+    /// * `session_id` - The session id of the packet.
+    /// * `nack` - The Nack packet to be sent.
     fn build_send_nack(
         &self,
         index: usize,
@@ -437,18 +446,20 @@ impl RustezeDrone {
         let source_routing_header = routing_header.sub_route(..index);
         if source_routing_header.is_none() {
             return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Hops: {} \n Hop index: {}",
+                    "[DRONE-{}][NACK] - Unable to retrieve source routing header sub-route. \n Hops: {} \n Hop index: {}",
                     self.id, routing_header, routing_header.hop_index
                 ));
         }
-        let mut source_routing_header = source_routing_header.unwrap();
-        source_routing_header.reverse();
+        
+        let mut new_routing_header = source_routing_header.unwrap();
+        new_routing_header.hop_index = 0;
+        new_routing_header.reverse();
 
-        let packet = Packet::new_nack(source_routing_header, session_id, nack);
+        let packet = Packet::new_nack(new_routing_header.clone(), session_id, nack);
 
-        // Retrieve the senderination (Sender) to send the Nack.
+        // Retrieve the sender to send the Nack.
         let sender = get_sender(
-            routing_header.current_hop().unwrap_or(0),
+            new_routing_header.current_hop().unwrap_or(0),
             &self.packet_senders,
         );
         if let Err(err) = sender {
@@ -457,8 +468,22 @@ impl RustezeDrone {
                 self.id, err
             ));
         }
+        // let sender = sender.unwrap();
+        if let Err(err) = send_packet(&sender.unwrap(), &packet) {
+            // Send to SC
+            let res = sc_send_packet(
+                &self.controller_send,
+                &DroneEvent::ControllerShortcut(packet),
+            );
+            return Err(format!(
+                "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
+                self.id, err
+            ));
+        }
+        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet));
+        Ok(())
 
-        self.send_ack(sender.unwrap(), packet)
+
     }
 }
 
@@ -472,34 +497,21 @@ impl RustezeDrone {
 
     fn send_fragment(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if self.to_drop() {
-            let source_routing_header = packet
-                .routing_header
-                .sub_route(..packet.routing_header.hop_index);
-            if source_routing_header.is_none() {
-                return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Unable to retrieve source routing header sub-route. \n Hops: {} \n Hop index: {}",
-                    self.id, packet.routing_header, packet.routing_header.hop_index
-                ));
-            }
-            let mut source_routing_header = source_routing_header.unwrap();
-            source_routing_header.reverse();
-
-            let nack = Packet::new_nack(
-                source_routing_header,
+            let res = self.build_send_nack(
+                packet.routing_header.hop_index,
+                packet.routing_header.clone(),
                 packet.session_id,
                 Nack {
                     fragment_index: packet.get_fragment_index(),
                     nack_type: NackType::Dropped,
                 },
             );
-            let res = self.send_nack(sender, nack);
             if let Err(err) = res {
                 return Err(format!(
                     "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for \"to drop\" fragment: {}",
                     self.id, err
                 ));
             }
-            let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet));
             return Err("DROPPED".to_string());
         } else {
             let res = send_packet(&sender, &packet);
