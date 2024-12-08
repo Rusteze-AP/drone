@@ -12,11 +12,11 @@ use wg_internal::packet::{Fragment, Nack, NackType, Packet, PacketType};
 const TIMEOUT: Duration = Duration::from_millis(400);
 
 /// Creates a sample packet for testing purposes. For convenience, using 1-10 for clients, 11-20 for drones and 21-30 for servers
-fn create_sample_packet() -> Packet {
+fn create_sample_packet(hop_index: usize, hops : Vec<u8>) -> Packet {
     Packet::new_fragment(
         SourceRoutingHeader {
-            hop_index: 1,
-            hops: vec![1, 11, 12, 21],
+            hop_index,
+            hops,
         },
         1,
         Fragment {
@@ -24,6 +24,31 @@ fn create_sample_packet() -> Packet {
             total_n_fragments: 1,
             length: 128,
             data: [1; 128],
+        },
+    )
+}
+
+fn get_ack(hop_index : usize, hops : Vec<u8>) -> Packet {
+    Packet::new_ack(
+        SourceRoutingHeader {
+            hop_index,
+            hops,
+        },
+        1,
+        1,
+    )
+}
+
+fn get_nack(hop_index : usize, hops: Vec<u8>, nack_type : NackType) -> Packet {
+    Packet::new_nack(
+        SourceRoutingHeader {
+            hop_index,
+            hops,
+        },
+        1,
+        Nack {
+            fragment_index: 1,
+            nack_type,
         },
     )
 }
@@ -52,7 +77,7 @@ pub fn generic_fragment_forward<T: Drone + Send + 'static>() {
         drone.run();
     });
 
-    let mut msg = create_sample_packet();
+    let mut msg = create_sample_packet(1, vec![1, 11, 12, 21]);
 
     // "Client" sends packet to d
     d_send.send(msg.clone()).unwrap();
@@ -93,22 +118,12 @@ pub fn generic_fragment_drop<T: Drone + Send + 'static>() {
         drone.run();
     });
 
-    let msg = create_sample_packet();
+    let msg = create_sample_packet(1, vec![1, 11, 12, 21]);
 
     // "Client" sends packet to the drone
     d_send.send(msg.clone()).unwrap();
 
-    let nack_packet = Packet::new_nack(
-        SourceRoutingHeader {
-            hop_index: 1,
-            hops: vec![11, 1],
-        },
-        1,
-        Nack {
-            fragment_index: 1,
-            nack_type: NackType::Dropped,
-        },
-    );
+    let nack_packet = get_nack(1, vec![11, 1], NackType::Dropped);
 
     // Client listens for packet from the drone (Dropped Nack)
     assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), nack_packet);
@@ -162,7 +177,7 @@ pub fn generic_chain_fragment_drop<T: Drone + Send + 'static>() {
         drone2.run();
     });
 
-    let msg = create_sample_packet();
+    let msg = create_sample_packet(1, vec![1, 11, 12, 21]);
 
     // "Client" sends packet to the drone
     d_send.send(msg.clone()).unwrap();
@@ -227,7 +242,7 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
         drone2.run();
     });
 
-    let mut msg = create_sample_packet();
+    let mut msg = create_sample_packet(1, vec![1, 11, 12, 21]);
 
     // "Client" sends packet to the drone
     d_send.send(msg.clone()).unwrap();
@@ -251,13 +266,163 @@ pub fn generic_chain_fragment_ack<T: Drone + Send + 'static>() {
     // Client receives an ACK originated from 's'
     assert_eq!(
         c_recv.recv_timeout(TIMEOUT).unwrap(),
-        Packet::new_ack(
-            SourceRoutingHeader {
-                hop_index: 3,
-                hops: vec![21, 12, 11, 1],
-            },
-            1,
-            1,
-        )
+        get_ack(3, vec![21, 12, 11, 1])
     );
 }
+
+/// Checks if the packet containing an ACK is correctly forwarded by the drone.
+/// The assert consists in checking if the drone sends the packet to both the next drone and the SC.
+pub fn generic_ack_forward<T: Drone + Send + 'static>() {
+    // Drone 11
+    let (d_send, d_recv) = unbounded();
+    // Drone 12
+    let (d12_send, d12_recv) = unbounded();
+    // SC - needed to not make the drone crash
+    let (_d_command_send, d_command_recv) = unbounded();
+    let (d_event_send, d_event_recv) = unbounded();
+
+    // Drone 11
+    let mut drone = T::new(
+        11,
+        d_event_send.clone(),
+        d_command_recv.clone(),
+        d_recv,
+        HashMap::from([(12, d12_send.clone())]),
+        0.0,
+    );
+
+    // Spawn the drone's run method in a separate thread
+    thread::spawn(move || {
+        drone.run();
+    });
+
+    let mut ack = get_ack(1, vec![1, 11, 12, 21]);
+
+    // "Client" sends packet to d11
+    d_send.send(ack.clone()).unwrap();
+    ack.routing_header.hop_index = 2;
+
+    // d12 receives packet from d11
+    assert_eq!(d12_recv.recv_timeout(TIMEOUT).unwrap(), ack);
+    // SC gets notified that the packet was sent by d11
+    assert_eq!(
+        d_event_recv.recv_timeout(TIMEOUT).unwrap(),
+        DroneEvent::PacketSent(ack)
+    );
+}
+
+/// Checks if the packet containing an NACK is correctly forwarded by the drone.
+/// The assert consists in checking if the drone sends the packet to both the next drone and the SC.
+pub fn generic_nack_forward<T: Drone + Send + 'static>() {
+        // Drone 11
+        let (d_send, d_recv) = unbounded();
+        // Drone 12
+        let (d12_send, d12_recv) = unbounded();
+        // SC - needed to not make the drone crash
+        let (_d_command_send, d_command_recv) = unbounded();
+        let (d_event_send, d_event_recv) = unbounded();
+    
+        // Drone 11
+        let mut drone = T::new(
+            11,
+            d_event_send.clone(),
+            d_command_recv.clone(),
+            d_recv,
+            HashMap::from([(12, d12_send.clone())]),
+            0.0,
+        );
+    
+        // Spawn the drone's run method in a separate thread
+        thread::spawn(move || {
+            drone.run();
+        });
+    
+        let mut nack = get_nack(1, vec![1, 11, 12, 21], NackType::Dropped);
+    
+        // "Client" sends packet to d11
+        d_send.send(nack.clone()).unwrap();
+        nack.routing_header.hop_index = 2;
+    
+        // d12 receives packet from d11
+        assert_eq!(d12_recv.recv_timeout(TIMEOUT).unwrap(), nack);
+        // SC gets notified that the packet was sent by d11
+        assert_eq!(
+            d_event_recv.recv_timeout(TIMEOUT).unwrap(),
+            DroneEvent::PacketSent(nack)
+        );
+}
+
+pub fn generic_destination_is_drone<T: Drone + Send + 'static>() {
+    // Client 1
+    let (c_send, c_recv) = unbounded();
+    // Drone 11
+    let (d_send, d_recv) = unbounded();
+    // SC - needed to not make the drone crash
+    let (_d_command_send, d_command_recv) = unbounded();
+    let (d_event_send, d_event_recv) = unbounded();
+
+    // Drone 11
+    let mut drone = T::new(
+        11,
+        d_event_send.clone(),
+        d_command_recv.clone(),
+        d_recv,
+        HashMap::from([(1, c_send.clone())]),
+        0.0,
+    );
+
+    // Spawn the drone's run method in a separate thread
+    thread::spawn(move || {
+        drone.run();
+    });
+
+    let packet = create_sample_packet(1, vec![1, 11]);
+
+    // "Client" sends packet to d11
+    d_send.send(packet.clone()).unwrap();
+
+    // "Client" expects a NACK with DestionationIsDrone
+    assert_eq!(
+        c_recv.recv_timeout(TIMEOUT).unwrap(),
+        get_nack(1, vec![11, 1], NackType::DestinationIsDrone)
+    );
+}
+
+// pub fn generic_wrong_ack_receive<T: Drone + Send + 'static> () {
+//     // Drone 11
+//     let (d_send, d_recv) = unbounded();
+//     // Drone 12
+//     let (d12_send, d12_recv) = unbounded();
+//     // SC - needed to not make the drone crash
+//     let (_d_command_send, d_command_recv) = unbounded();
+//     let (d_event_send, d_event_recv) = unbounded();
+
+//     // Drone 11
+//     let mut drone = T::new(
+//         11,
+//         d_event_send.clone(),
+//         d_command_recv.clone(),
+//         d_recv,
+//         HashMap::from([(12, d12_send.clone())]),
+//         0.0,
+//     );
+
+//     // Spawn the drone's run method in a separate thread
+//     thread::spawn(move || {
+//         drone.run();
+//     });
+
+//     let mut ack = get_ack(1, vec![21, 12, 11, 1]);
+
+//     // "Client" sends packet to d11
+//     d_send.send(ack.clone()).unwrap();
+//     ack.routing_header.hop_index = 2;
+
+//     // d12 receives packet from d11
+//     assert_eq!(d12_recv.recv_timeout(TIMEOUT).unwrap(), ack);
+//     // SC gets notified that the packet was sent by d11
+//     assert_eq!(
+//         d_event_recv.recv_timeout(TIMEOUT).unwrap(),
+//         DroneEvent::PacketSent(ack)
+//     );
+// } 
