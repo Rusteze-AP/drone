@@ -1,10 +1,13 @@
 use crossbeam::channel::unbounded;
 use std::collections::HashMap;
 use std::thread;
+use std::time::Duration;
 use wg_internal::drone::Drone;
-use wg_internal::network::SourceRoutingHeader;
+use wg_internal::network::{NodeId, SourceRoutingHeader};
 use wg_internal::packet::{FloodRequest, FloodResponse, NodeType};
 use wg_internal::packet::{Packet, PacketType};
+
+const TIMEOUT: Duration = Duration::from_millis(400);
 
 fn create_sample_flood_req(flood_id: u64) -> Packet {
     Packet {
@@ -19,6 +22,15 @@ fn create_sample_flood_req(flood_id: u64) -> Packet {
         },
         session_id: 1,
     }
+}
+
+fn create_flood_res(flood_id: u64, path_trace: Vec<(NodeId, NodeType)>) -> Packet {
+    let routing_header = SourceRoutingHeader::new(vec![1, 2, 3], 1);
+    let flood_res = FloodResponse {
+        flood_id,
+        path_trace,
+    };
+    Packet::new_flood_response(routing_header, 1, flood_res)
 }
 
 /// This function checks whether a drone builds a flood response packet correctly.
@@ -116,7 +128,7 @@ pub fn generic_new_flood_neighbours<T: Drone + Send + 'static>() {
         drone3.run();
     });
 
-    let mut msg = create_sample_flood_req(1);
+    let msg = create_sample_flood_req(1);
     // Client sends packet to d
     d_send.send(msg.clone()).unwrap();
 
@@ -171,4 +183,32 @@ pub fn generic_new_flood_neighbours<T: Drone + Send + 'static>() {
     );
 }
 
-// TODO known flood request behaviour
+pub fn generic_flood_res<T: Drone + Send + 'static>() {
+    let (d2_send, d2_recv) = unbounded();
+    let (d3_send, d3_recv) = unbounded();
+    let (_d_command_send, d_command_recv) = unbounded();
+
+    let mut drone_2 = T::new(
+        2,
+        unbounded().0,
+        d_command_recv,
+        d2_recv,
+        HashMap::from([(3, d3_send.clone())]),
+        0.0,
+    );
+
+    thread::spawn(move || {
+        drone_2.run();
+    });
+
+    let mut flood_res = create_flood_res(1, vec![(1, NodeType::Client), (11, NodeType::Drone)]);
+    d2_send.send(flood_res.clone()).unwrap();
+
+    flood_res.routing_header.hop_index += 1;
+
+    assert_eq!(d3_recv.recv_timeout(TIMEOUT).unwrap(), flood_res);
+}
+
+pub fn generic_known_flood_req<T: Drone + Send + 'static>() {
+    todo!()
+}
