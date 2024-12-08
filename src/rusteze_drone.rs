@@ -107,7 +107,7 @@ impl RustezeDrone {
         let mut send_res = String::new();
         // If current_node is wrong
         if current_node != self.id {
-            if let PacketType::FloodRequest(_) = &packet.pack_type {
+            if let PacketType::MsgFragment(_) = &packet.pack_type {
                 let res = self.build_send_nack(
                     packet.routing_header.hop_index + 1,
                     packet.routing_header.clone(),
@@ -142,7 +142,7 @@ impl RustezeDrone {
                 match sender_res {
                     Ok(sender) => Ok(sender),
                     Err(err) => {
-                        if let PacketType::FloodRequest(_) = &packet.pack_type {
+                        if let PacketType::MsgFragment(_) = &packet.pack_type {
                             let res = self.build_send_nack(
                                 packet.routing_header.hop_index,
                                 packet.routing_header.clone(),
@@ -164,7 +164,7 @@ impl RustezeDrone {
                 }
             }
             None => {
-                if let PacketType::FloodRequest(_) = &packet.pack_type {
+                if let PacketType::MsgFragment(_) = &packet.pack_type {
                     let res = self.build_send_nack(
                         packet.routing_header.hop_index,
                         packet.routing_header.clone(),
@@ -194,7 +194,6 @@ impl RustezeDrone {
             return self.check_next_hop(current_node, packet);
         }
 
-        let pt = Self::get_packet_type(&packet.pack_type);
         let mut send_res = (
             format!(
                 "[DRONE-{}][ERR] - No current hop found.\n Hops: {}\n",
@@ -202,7 +201,7 @@ impl RustezeDrone {
             ),
             String::new(),
         );
-        if pt == "Fragment" {
+        if let PacketType::MsgFragment(_) = &packet.pack_type {
             let res = self.build_send_nack(
                 packet.routing_header.hop_index,
                 packet.routing_header.clone(),
@@ -496,7 +495,7 @@ impl RustezeDrone {
             );
             return Err(format!("Error occurred while sending nack: {}", err));
         }
-        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet));
+        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 }
@@ -509,10 +508,12 @@ impl RustezeDrone {
         self.pdr > random_value
     }
 
-    fn send_fragment(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
+    fn send_fragment(&self, sender: Sender<Packet>, mut packet: Packet) -> Result<(), String> {
         if self.to_drop() {
+            packet.routing_header.decrease_hop_index(); // Hop index has been increased before to check the next hop
+            let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketDropped(packet.clone()));
             let res = self.build_send_nack(
-                packet.routing_header.hop_index,
+                packet.routing_header.hop_index+1,
                 packet.routing_header.clone(),
                 packet.session_id,
                 Nack {
