@@ -115,20 +115,15 @@ impl RustezeDrone {
 /*FLOODING HANDLERS */
 impl RustezeDrone {
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
-        let mut hops: Vec<NodeId> = flood_req.path_trace.iter().map(|(id, _)| *id).collect();
-        hops.reverse();
-        let sender = hops[1];
+        let mut packet = flood_req.generate_response(1); // Note: returns with hop_index = 0;
+        packet.routing_header.increase_hop_index();
+        let dest = packet.routing_header.current_hop();
 
-        let packet = Packet::new_flood_response(
-            SourceRoutingHeader { hop_index: 1, hops },
-            1, // TODO - does it need to be retrieved from the flood request?
-            FloodResponse {
-                flood_id: flood_req.flood_id,
-                path_trace: flood_req.path_trace.clone(),
-            },
-        );
+        if dest.is_none() {
+            return (0, packet);
+        }
 
-        (sender, packet)
+        (dest.unwrap(), packet)
     }
 
     fn send_flood_response(&self, sender: NodeId, packet: Packet) -> Result<(), String> {
