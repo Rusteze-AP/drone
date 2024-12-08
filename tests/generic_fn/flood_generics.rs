@@ -210,5 +210,73 @@ pub fn generic_flood_res<T: Drone + Send + 'static>() {
 }
 
 pub fn generic_known_flood_req<T: Drone + Send + 'static>() {
-    todo!()
+    // Client 1
+    let (c_send, c_recv) = unbounded::<Packet>();
+    // Drone 11
+    let (d_send, d_recv) = unbounded();
+    // Drone 12
+    let (d12_send, d12_recv) = unbounded();
+    let (_d_command_send, d_command_recv) = unbounded();
+
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv.clone(),
+        d_recv.clone(),
+        HashMap::from([(1, c_send.clone()), (12, d12_send.clone())]),
+        0.0,
+    );
+
+    let mut drone2 = T::new(
+        12,
+        unbounded().0,
+        d_command_recv.clone(),
+        d12_recv.clone(),
+        HashMap::from([(11, d_send.clone())]),
+        0.0,
+    );
+
+    thread::spawn(move || {
+        drone.run();
+    });
+    thread::spawn(move || {
+        drone2.run();
+    });
+
+    let msg = create_sample_flood_req(1);
+    // Client sends packet to d
+    d_send.send(msg.clone()).unwrap();
+    thread::sleep(Duration::from_millis(300));
+    d_send.send(msg.clone()).unwrap();
+
+    let flood_res_1 = Packet {
+        pack_type: PacketType::FloodResponse(FloodResponse {
+            flood_id: 1,
+            path_trace: vec![(1, NodeType::Client), (11, NodeType::Drone)],
+        }),
+        routing_header: SourceRoutingHeader {
+            hop_index: 1,
+            hops: vec![11, 1],
+        },
+        session_id: 1,
+    };
+
+    let flood_res_2 = Packet {
+        pack_type: PacketType::FloodResponse(FloodResponse {
+            flood_id: 1,
+            path_trace: vec![
+                (1, NodeType::Client),
+                (11, NodeType::Drone),
+                (12, NodeType::Drone),
+            ],
+        }),
+        routing_header: SourceRoutingHeader {
+            hop_index: 2,
+            hops: vec![12, 11, 1],
+        },
+        session_id: 1,
+    };
+
+    assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), flood_res_2);
+    assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), flood_res_1);
 }
