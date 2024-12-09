@@ -12,3 +12,13 @@ fn new_flood_request() {
 fn new_flood_neighbours() {
     generic_new_flood_neighbours::<RustezeDrone>();
 }
+
+#[test]
+fn test_flood_res() {
+    generic_flood_res::<RustezeDrone>();
+}
+
+#[test]
+fn test_known_flood_req() {
+    generic_known_flood_req::<RustezeDrone>();
+}
