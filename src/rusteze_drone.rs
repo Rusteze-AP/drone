@@ -6,9 +6,7 @@ use std::collections::{HashMap, HashSet};
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::drone::Drone;
 use wg_internal::network::{NodeId, SourceRoutingHeader};
-use wg_internal::packet::{
-    FloodRequest, FloodResponse, Nack, NackType, NodeType, Packet, PacketType,
-};
+use wg_internal::packet::{FloodRequest, Nack, NackType, NodeType, Packet, PacketType};
 
 use crate::packet_send::{get_sender, sc_send_packet, send_packet};
 
@@ -30,33 +28,57 @@ pub struct RustezeDrone {
 impl RustezeDrone {
     fn send_ack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
+            self.logger.log_warn(format!("[DRONE-{}][ACK] - Failed to forward packet to [DRONE-{}]. \n Error: {} \n Trying to use SC shortcut...", self.id, packet.routing_header.current_hop().unwrap(), err).as_str());
             // Send to SC
             let res = sc_send_packet(
                 &self.controller_send,
-                &DroneEvent::ControllerShortcut(packet),
+                &DroneEvent::ControllerShortcut(packet.clone()),
             );
-            return Err(format!(
-                "[DRONE-{}][ACK] - Error occurred while sending ack: {}",
-                self.id, err
-            ));
+
+            if let Err(err) = res {
+                self.logger
+                    .log_error(format!("[DRONE-{}][ACK] - {}", self.id, err).as_str());
+                return Err(format!(
+                    "[DRONE-{}][ACK] - Unable to forward packet to neither next hop nor SC. \n Packet: {}",
+                    self.id, packet
+                ));
+            }
+            self.logger.log_debug(
+                format!(
+                    "[DRONE-{}][ACK] - Successfully sent ACK through SC. Packet: {}",
+                    self.id, packet
+                )
+                .as_str(),
+            );
         }
-        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 
-    fn send_nack(&self, sender: Sender<Packet>, packet: Packet) -> Result<(), String> {
+    fn send_nack(&self, sender: &Sender<Packet>, packet: Packet) -> Result<(), String> {
         if let Err(err) = send_packet(&sender, &packet) {
+            self.logger.log_warn(format!("[DRONE-{}][NACK] - Failed to forward packet to [DRONE-{}]. \n Error: {} \n Trying to use SC shortcut...", self.id, packet.routing_header.current_hop().unwrap(), err).as_str());
             // Send to SC
             let res = sc_send_packet(
                 &self.controller_send,
-                &DroneEvent::ControllerShortcut(packet),
+                &DroneEvent::ControllerShortcut(packet.clone()),
             );
-            return Err(format!(
-                "[DRONE-{}][NACK] - Error occurred while sending nack: {}",
-                self.id, err
-            ));
+
+            if let Err(err) = res {
+                self.logger
+                    .log_error(format!("[DRONE-{}][NACK] - {}", self.id, err).as_str());
+                return Err(format!(
+                    "[DRONE-{}][NACK] - Unable to forward packet to neither next hop nor SC. \n Packet: {}",
+                    self.id, packet
+                ));
+            }
+            self.logger.log_debug(
+                format!(
+                    "[DRONE-{}][NACK] - Successfully sent NACK through SC. Packet: {}",
+                    self.id, packet
+                )
+                .as_str(),
+            );
         }
-        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
         Ok(())
     }
 
@@ -96,19 +118,13 @@ impl RustezeDrone {
             &self.packet_senders,
         );
         if let Err(err) = sender {
-            return Err(err);
+            return Err(format!(
+                "[DRONE-{}][NACK] - Error occurred while sending NACK: {}",
+                self.id, err
+            ));
         }
-        // let sender = sender.unwrap();
-        if let Err(err) = send_packet(&sender.unwrap(), &packet) {
-            // Send to SC
-            let res = sc_send_packet(
-                &self.controller_send,
-                &DroneEvent::ControllerShortcut(packet),
-            );
-            return Err(format!("Error occurred while sending nack: {}", err));
-        }
-        let res = sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet));
-        Ok(())
+
+        self.send_nack(&sender.unwrap(), packet)
     }
 }
 
@@ -138,15 +154,29 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
         if let Err(err) = send_packet(&sender, &packet) {
+            self.logger.log_warn(format!("[DRONE-{}][FLOOD RESPONSE] - Failed to forward packet to [DRONE-{}]. \n Error: {} \n Trying to use SC shortcut...", self.id, packet.routing_header.current_hop().unwrap(), err).as_str());
             // Send to SC
             let res = sc_send_packet(
                 &self.controller_send,
-                &DroneEvent::ControllerShortcut(packet),
+                &DroneEvent::ControllerShortcut(packet.clone()),
             );
-            return Err(format!(
-                "[DRONE-{}][FLOOD RESPONSE] - Error occurred while sending flood response: {}",
-                self.id, err
-            ));
+
+            if let Err(err) = res {
+                self.logger
+                    .log_error(format!("[DRONE-{}][FLOOD RESPONSE] - {}", self.id, err).as_str());
+                return Err(format!(
+                    "[DRONE-{}][FLOOD RESPONSE] - Unable to forward packet to neither next hop nor SC. \n Packet: {}",
+                    self.id, packet
+                ));
+            }
+
+            self.logger.log_debug(
+                format!(
+                    "[DRONE-{}][FLOOD RESPONSE] - Successfully sent flood response through SC. Packet: {}",
+                    self.id, packet
+                )
+                .as_str(),
+            );
         }
         Ok(())
     }
@@ -226,6 +256,10 @@ impl RustezeDrone {
                 &self.controller_send,
                 &DroneEvent::PacketDropped(packet.clone()),
             );
+            if let Err(err) = res {
+                self.logger
+                    .log_error(format!("[DRONE-{}][FRAGMENT] - {}", self.id, err).as_str());
+            }
             let res = self.build_send_nack(
                 packet.routing_header.hop_index + 1,
                 packet.routing_header.clone(),
@@ -237,11 +271,11 @@ impl RustezeDrone {
             );
             if let Err(err) = res {
                 return Err(format!(
-                    "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for \"to drop\" fragment: {}",
+                    "[DRONE-{}][FRAGMENT] - Error occurred while sending NACK for \"to drop\" fragment. \n Error: {}",
                     self.id, err
                 ));
             }
-            return Err("DROPPED".to_string());
+            return Err(format!("[DRONE-{}][FRAGMENT] - Fragment dropped", self.id,));
         }
 
         let res = send_packet(&sender, &packet);
@@ -251,12 +285,11 @@ impl RustezeDrone {
                 self.id, err
             ));
         }
-
-        sc_send_packet(&self.controller_send, &DroneEvent::PacketSent(packet))
+        Ok(())
     }
 }
 
-/*COMMANDS HANDLER */
+/*COMMANDS & EVENT HANDLERs */
 impl RustezeDrone {
     fn set_pdr(&mut self, new_pdr: f32) {
         self.pdr = new_pdr;
@@ -309,22 +342,35 @@ impl RustezeDrone {
             }
         }
     }
+
+    fn event_dispatcher(&self, packet: &Packet, packet_str: &String) {
+        let res = sc_send_packet(
+            &self.controller_send,
+            &DroneEvent::PacketSent(packet.clone()),
+        );
+        if let Err(err) = res {
+            self.logger.log_error(
+                format!("[DRONE-{}][ACK] - Packet event forward: {}", self.id, err).as_str(),
+            );
+            return;
+        }
+        self.logger.log_debug(
+            format!(
+                "[DRONE-{}][{}] - Packet event sent successfully",
+                self.id,
+                packet_str.to_ascii_uppercase()
+            )
+            .as_str(),
+        );
+    }
 }
 
 /* MAIN PACKETS HANDLER */
 impl RustezeDrone {
-    fn print_log(&self, message: Result<(), String>, packet_str: String) {
+    fn print_log(&self, message: &Result<(), String>, packet_str: &String) {
         if let Err(err) = message {
-            if err == "DROPPED" {
-                self.logger.log_debug(
-                    format!(
-                        "[DRONE-{}][{}] - {} dropped",
-                        self.id,
-                        packet_str.to_ascii_uppercase(),
-                        packet_str
-                    )
-                    .as_str(),
-                );
+            if err.contains("dropped") {
+                self.logger.log_warn(err.as_str());
             } else {
                 self.logger.log_error(err.as_str());
             }
@@ -478,9 +524,18 @@ impl RustezeDrone {
         if !self.terminated {
             if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
                 res = self.handle_flood_req(flood_req);
-                self.print_log(res, packet_str);
+                self.print_log(&res, &packet_str);
                 return;
             }
+        } else {
+            self.logger.log_warn(
+                format!(
+                    "[DRONE-{}][FLOOD REQUEST] - Drone is terminated. Ignoring packet: {}",
+                    self.id, packet
+                )
+                .as_str(),
+            );
+            return;
         }
 
         // Check if header is valid
@@ -496,9 +551,10 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
 
+        let forward_packet = packet.clone();
         res = match &mut packet.pack_type {
-            PacketType::Ack(_) => self.send_ack(sender, packet),
-            PacketType::Nack(_) => self.send_nack(sender, packet),
+            PacketType::Ack(_) => self.send_ack(sender, forward_packet),
+            PacketType::Nack(_) => self.send_nack(&sender, forward_packet),
             PacketType::MsgFragment(_) => {
                 if self.terminated {
                     self.build_send_nack(
@@ -511,30 +567,30 @@ impl RustezeDrone {
                         },
                     )
                 } else {
-                    self.send_fragment(sender, packet)
+                    self.send_fragment(sender, forward_packet)
                 }
             }
-            PacketType::FloodResponse(_) => self.handle_flood_res(sender, packet),
-            PacketType::FloodRequest(_) => {
-                if self.terminated {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "[DRONE-{}][PACKET] - Unknown packet {}",
-                        self.id, packet
-                    ))
-                }
-            }
+            PacketType::FloodResponse(_) => self.handle_flood_res(sender, forward_packet),
+            PacketType::FloodRequest(_) => Err(format!(
+                "[DRONE-{}][PACKET] - Unknown packet {}",
+                self.id, packet
+            )),
         };
 
-        self.print_log(res, packet_str);
+        // Print packet forwarding result
+        self.print_log(&res, &packet_str);
+
+        // If packet is sent successfully, send event to SC
+        if let Ok(()) = res {
+            self.event_dispatcher(&packet, &packet_str);
+        }
     }
 
     fn internal_run(&mut self) {
         loop {
             if self.terminated {
                 self.logger
-                    .log_debug(format!("[DRONE-{}][RUNNER] - Terminated", self.id).as_str());
+                    .log_debug(format!("[DRONE-{}][RUNNER] - Terminating...", self.id).as_str());
                 break;
             }
             select_biased! {
