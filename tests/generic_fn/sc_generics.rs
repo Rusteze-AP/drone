@@ -2,10 +2,9 @@ use crossbeam::channel::unbounded;
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
-use wg_internal::controller::{DroneCommand, DroneEvent};
+use wg_internal::controller::DroneCommand;
 use wg_internal::drone::Drone;
-use wg_internal::network::SourceRoutingHeader;
-use wg_internal::packet::{Fragment, Nack, NackType, Packet, PacketType};
+use wg_internal::packet::Packet;
 
 const TIMEOUT: Duration = Duration::from_millis(400);
 

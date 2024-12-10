@@ -71,7 +71,7 @@ pub fn generic_new_flood<T: Drone + Send + 'static>() {
     };
 
     // Client receive a flood response originated from 'd'
-    assert_eq!(c_recv.recv().unwrap(), flood_res);
+    assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), flood_res);
 }
 
 pub fn generic_new_flood_no_initiator<T: Drone + Send + 'static>() {
@@ -111,7 +111,7 @@ pub fn generic_new_flood_no_initiator<T: Drone + Send + 'static>() {
     };
 
     // Client receive a flood response originated from 'd'
-    assert_eq!(c_recv.recv().unwrap(), flood_res);
+    assert_eq!(c_recv.recv_timeout(TIMEOUT).unwrap(), flood_res);
 }
 
 /// This function checks if a flood request is forwarded to all neighbours of a drone (excluding the sender) and waits for 2 responses.
@@ -205,7 +205,7 @@ pub fn generic_new_flood_neighbours<T: Drone + Send + 'static>() {
     };
 
     // d2 and d3 receive a flood request from d (containing the path trace)
-    let res = c_recv.recv().unwrap();
+    let res = c_recv.recv_timeout(TIMEOUT).unwrap();
     assert!(
         res == f_res12 || res == f_res13,
         "assertion `left == right` failed:\nleft: `{:?}`\nright1: `{:?}`\nright2: `{:?}`",
@@ -213,7 +213,7 @@ pub fn generic_new_flood_neighbours<T: Drone + Send + 'static>() {
         f_res12,
         f_res13
     );
-    let res = c_recv.recv().unwrap();
+    let res = c_recv.recv_timeout(TIMEOUT).unwrap();
     assert!(
         res == f_res12 || res == f_res13,
         "assertion `left == right` failed:\nleft: `{:?}`\nright1: `{:?}`\nright2: `{:?}`",
