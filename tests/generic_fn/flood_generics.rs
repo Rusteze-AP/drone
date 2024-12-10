@@ -9,12 +9,12 @@ use wg_internal::packet::{Packet, PacketType};
 
 const TIMEOUT: Duration = Duration::from_millis(400);
 
-fn create_sample_flood_req(flood_id: u64) -> Packet {
+fn create_sample_flood_req(flood_id: u64, path_trace: Vec<(NodeId, NodeType)>) -> Packet {
     Packet {
         pack_type: PacketType::FloodRequest(FloodRequest {
             flood_id,
             initiator_id: 1,
-            path_trace: vec![(1, NodeType::Client)],
+            path_trace,
         }),
         routing_header: SourceRoutingHeader {
             hop_index: 0,
@@ -54,7 +54,7 @@ pub fn generic_new_flood<T: Drone + Send + 'static>() {
         drone.run();
     });
 
-    let msg = create_sample_flood_req(1);
+    let msg = create_sample_flood_req(1, vec![(1, NodeType::Client)]);
     // Client sends packet to d
     d_send.send(msg.clone()).unwrap();
 
@@ -62,6 +62,46 @@ pub fn generic_new_flood<T: Drone + Send + 'static>() {
         pack_type: PacketType::FloodResponse(FloodResponse {
             flood_id: 1,
             path_trace: vec![(1, NodeType::Client), (11, NodeType::Drone)],
+        }),
+        routing_header: SourceRoutingHeader {
+            hop_index: 1,
+            hops: vec![11, 1],
+        },
+        session_id: 1,
+    };
+
+    // Client receive a flood response originated from 'd'
+    assert_eq!(c_recv.recv().unwrap(), flood_res);
+}
+
+pub fn generic_new_flood_no_initiator<T: Drone + Send + 'static>() {
+    // Client 1
+    let (c_send, c_recv) = unbounded::<Packet>();
+    // Drone 11
+    let (d_send, d_recv) = unbounded();
+    let (_d_command_send, d_command_recv) = unbounded();
+
+    let mut drone = T::new(
+        11,
+        unbounded().0,
+        d_command_recv,
+        d_recv.clone(),
+        HashMap::from([(1, c_send.clone())]),
+        0.0,
+    );
+
+    thread::spawn(move || {
+        drone.run();
+    });
+
+    let msg = create_sample_flood_req(1, vec![]);
+    // Client sends packet to d
+    d_send.send(msg.clone()).unwrap();
+
+    let flood_res = Packet {
+        pack_type: PacketType::FloodResponse(FloodResponse {
+            flood_id: 1,
+            path_trace: vec![(11, NodeType::Drone)],
         }),
         routing_header: SourceRoutingHeader {
             hop_index: 1,
@@ -128,7 +168,7 @@ pub fn generic_new_flood_neighbours<T: Drone + Send + 'static>() {
         drone3.run();
     });
 
-    let msg = create_sample_flood_req(1);
+    let msg = create_sample_flood_req(1, vec![(1, NodeType::Client)]);
     // Client sends packet to d
     d_send.send(msg.clone()).unwrap();
 
@@ -243,7 +283,7 @@ pub fn generic_known_flood_req<T: Drone + Send + 'static>() {
         drone2.run();
     });
 
-    let msg = create_sample_flood_req(1);
+    let msg = create_sample_flood_req(1, vec![(1, NodeType::Client)]);
     // Client sends packet to d
     d_send.send(msg.clone()).unwrap();
     thread::sleep(Duration::from_millis(300));

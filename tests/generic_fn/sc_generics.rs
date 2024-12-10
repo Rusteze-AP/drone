@@ -3,15 +3,13 @@ use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
 use wg_internal::controller::{DroneCommand, DroneEvent};
-use wg_internal::drone::{Drone};
+use wg_internal::drone::Drone;
 use wg_internal::network::SourceRoutingHeader;
 use wg_internal::packet::{Fragment, Nack, NackType, Packet, PacketType};
 
-
-
 const TIMEOUT: Duration = Duration::from_millis(400);
 
-pub fn generic_receive_sc_command<T: Drone + Send + 'static>(){
+pub fn generic_receive_sc_command<T: Drone + Send + 'static>() {
     // Drone 11
     let (d_send, d_recv) = unbounded();
     // Drone 12
@@ -38,12 +36,9 @@ pub fn generic_receive_sc_command<T: Drone + Send + 'static>(){
         d_command_recv.recv_timeout(TIMEOUT).unwrap(),
         DroneCommand::Crash
     );
-
 }
 
-
-
-pub fn generic_handle_crash<T: Drone + Send + 'static>(){
+pub fn generic_handle_crash<T: Drone + Send + 'static>() {
     // Drone 11
     let (d_send, d_recv) = unbounded();
     // Drone 12
@@ -70,7 +65,4 @@ pub fn generic_handle_crash<T: Drone + Send + 'static>(){
         d_command_recv.recv_timeout(TIMEOUT).unwrap(),
         DroneCommand::Crash
     );
-
 }
-
-

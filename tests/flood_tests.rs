@@ -9,6 +9,11 @@ fn new_flood_request() {
 }
 
 #[test]
+fn new_flood_req_no_initiator() {
+    generic_new_flood_no_initiator::<RustezeDrone>();
+}
+
+#[test]
 fn new_flood_neighbours() {
     generic_new_flood_neighbours::<RustezeDrone>();
 }
