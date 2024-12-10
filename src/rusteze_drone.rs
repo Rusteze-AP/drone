@@ -291,12 +291,19 @@ impl RustezeDrone {
 
 /*COMMANDS & EVENT HANDLERs */
 impl RustezeDrone {
-    fn set_pdr(&mut self, new_pdr: f32) {
-        self.pdr = new_pdr;
+    fn set_pdr(&mut self, new_pdr: &f32) {
+        self.pdr = *new_pdr;
+        self.logger.log_debug(
+            format!(
+                "[DRONE-{}][SET PDR] - Packet drop rate set to {}",
+                self.id, self.pdr
+            )
+            .as_str(),
+        );
     }
 
-    fn remove_sender(&mut self, node_id: NodeId) -> Result<(), String> {
-        let res = self.packet_senders.remove(&node_id);
+    fn remove_sender(&mut self, node_id: &NodeId) -> Result<(), String> {
+        let res = self.packet_senders.remove(node_id);
         if res.is_none() {
             Err(format!(
                 "[DRONE-{}][REMOVE SENDER] - Sender with id {} not found",
@@ -307,8 +314,8 @@ impl RustezeDrone {
         }
     }
 
-    fn add_sender(&mut self, id: NodeId, sender: Sender<Packet>) -> Result<(), String> {
-        let res = self.packet_senders.insert(id, sender);
+    fn add_sender(&mut self, id: &NodeId, sender: &Sender<Packet>) -> Result<(), String> {
+        let res = self.packet_senders.insert(*id, sender.clone());
         if res.is_some() {
             Err(format!(
                 "[DRONE-{}][ADD SENDER] - Sender with id {} already exists",
@@ -320,7 +327,7 @@ impl RustezeDrone {
     }
 
     fn crash(&mut self) -> Result<(), String> {
-        //TODO handle drone crash
+        self.logger.log_debug(format!("[DRONE-{}][CRASH] Drone entered crash sequence. Terminating... - ", self.id).as_str());
         self.terminated = true;
         Ok(())
     }
@@ -328,10 +335,10 @@ impl RustezeDrone {
     fn command_dispatcher(&mut self, command: DroneCommand) {
         if !self.terminated {
             let res = match command {
-                DroneCommand::RemoveSender(node_id) => self.remove_sender(node_id),
-                DroneCommand::AddSender(id, sender) => self.add_sender(id, sender),
+                DroneCommand::RemoveSender(node_id) => self.remove_sender(&node_id),
+                DroneCommand::AddSender(id, sender) => self.add_sender(&id, &sender),
                 DroneCommand::SetPacketDropRate(new_pdr) => {
-                    self.set_pdr(new_pdr);
+                    self.set_pdr(&new_pdr);
                     Ok(())
                 }
                 DroneCommand::Crash => self.crash(),
@@ -350,7 +357,7 @@ impl RustezeDrone {
         );
         if let Err(err) = res {
             self.logger.log_error(
-                format!("[DRONE-{}][ACK] - Packet event forward: {}", self.id, err).as_str(),
+                format!("[DRONE-{}][{}] - Packet event forward: {}", self.id, packet_str.to_ascii_uppercase(), err).as_str(),
             );
             return;
         }
@@ -589,25 +596,31 @@ impl RustezeDrone {
     fn internal_run(&mut self) {
         loop {
             if self.terminated {
-                self.logger
-                    .log_debug(format!("[DRONE-{}][RUNNER] - Terminating...", self.id).as_str());
-                break;
-            }
-            select_biased! {
-                recv(self.controller_recv) -> command => {
-                    if let Ok(command) = command {
-                        self.command_dispatcher(command);
-                    } else {
-                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Simulation controller receiver disconnected. Terminating thread...", self.id).as_str());
+                match self.packet_recv.recv() {
+                    Ok(msg) => self.packet_dispatcher(msg),
+                    Err(_) => {
+                        self.logger
+                            .log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
                         break;
                     }
                 }
-                recv(self.packet_recv) -> msg => {
-                    if let Ok(msg) = msg {
-                        self.packet_dispatcher(msg);
-                    } else {
-                        self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
-                        break;
+            } else {
+                select_biased! {
+                    recv(self.controller_recv) -> command => {
+                        if let Ok(command) = command {
+                            self.command_dispatcher(command);
+                        } else {
+                            self.logger.log_error(format!("[DRONE-{}][RUNNER] - Simulation controller receiver disconnected. Terminating thread...", self.id).as_str());
+                            break;
+                        }
+                    }
+                    recv(self.packet_recv) -> msg => {
+                        if let Ok(msg) = msg {
+                            self.packet_dispatcher(msg);
+                        } else {
+                            self.logger.log_error(format!("[DRONE-{}][RUNNER] - Drone receiver disconnected. Terminating thread...", self.id).as_str());
+                            break;
+                        }
                     }
                 }
             }
