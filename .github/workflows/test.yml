@@ -1,4 +1,4 @@
-name: Cargo Build & Test
+name: Test and notify via Telegram
 
 on:
   push:
@@ -18,3 +18,9 @@ jobs:
 
     - name: Test
       run: cargo test --verbose --no-fail-fast --color always
+
+    - name: Notify
+      run: |
+        curl -X POST "https://api.telegram.org/bot${{ secrets.SAETTA_BOT_TOKEN }}/sendMessage" \
+          -H "Content-Type: application/json" \
+          -d "{"chat_id": ${{ secrets.RUSTEZE_CHAT_ID }}, "message_thread_id": 2,  "text": "Rusteze drone has been updated 🔥"}"
