@@ -1,6 +1,6 @@
 // use crate::messages::{RustezePacket, RustezeSourceRoutingHeader};
 use crossbeam::channel::{select_biased, Receiver, Sender};
-use logger::Logger;
+use logger::{LogLevel, Logger};
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use wg_internal::controller::{DroneCommand, DroneEvent};
@@ -327,7 +327,13 @@ impl RustezeDrone {
     }
 
     fn crash(&mut self) -> Result<(), String> {
-        self.logger.log_debug(format!("[DRONE-{}][CRASH] Drone entered crash sequence. Terminating... - ", self.id).as_str());
+        self.logger.log_debug(
+            format!(
+                "[DRONE-{}][CRASH] Drone entered crash sequence. Terminating... - ",
+                self.id
+            )
+            .as_str(),
+        );
         self.terminated = true;
         Ok(())
     }
@@ -357,7 +363,13 @@ impl RustezeDrone {
         );
         if let Err(err) = res {
             self.logger.log_error(
-                format!("[DRONE-{}][{}] - Packet event forward: {}", self.id, packet_str.to_ascii_uppercase(), err).as_str(),
+                format!(
+                    "[DRONE-{}][{}] - Packet event forward: {}",
+                    self.id,
+                    packet_str.to_ascii_uppercase(),
+                    err
+                )
+                .as_str(),
             );
             return;
         }
@@ -628,6 +640,29 @@ impl RustezeDrone {
     }
 }
 
+/* LOGGER HANDLER */
+impl RustezeDrone {
+    pub fn with_info(&mut self) {
+        self.logger.set_displayable(LogLevel::Info as u8);
+    }
+    
+    pub fn with_debug(&mut self) {
+        self.logger.set_displayable(LogLevel::Debug as u8);
+    }
+    
+    pub fn with_error(&mut self) {
+        self.logger.set_displayable(LogLevel::Error as u8);
+    }
+    
+    pub fn with_warn(&mut self) {
+        self.logger.set_displayable(LogLevel::Warn as u8);
+    }
+    
+    pub fn with_web_socket(&mut self) {
+        self.logger.set_web_socket(true);
+    }    
+}
+
 /* TRAIT IMPLEMENTATION */
 impl Drone for RustezeDrone {
     fn new(
@@ -647,7 +682,7 @@ impl Drone for RustezeDrone {
             controller_recv,
             terminated: false,
             flood_history: HashSet::new(),
-            logger: Logger::new(true, "RustezeDrone".to_string()),
+            logger: Logger::new(LogLevel::None as u8, false, "RustezeDrone".to_string()),
         }
     }
 
