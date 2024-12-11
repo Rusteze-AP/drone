@@ -1,5 +1,4 @@
 name: Test and notify via Telegram
-name: Test and notify via Telegram
 
 on:
   push:
