@@ -2,6 +2,8 @@ name: Test and notify via Telegram
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   
 env:
