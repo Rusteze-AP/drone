@@ -668,7 +668,7 @@ impl RustezeDrone {
     }
     
     pub fn with_web_socket(&mut self) {
-        self.logger.set_web_socket(true);
+        self.logger.init_web_socket();
     }    
 }
 

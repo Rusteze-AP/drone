@@ -45,6 +45,14 @@ fn main() {
 }
 ```
 
+To connect to the WebSocket, if enabled through the `with_websocket` method, you can use the following command in the terminal:
+
+```bash
+wscat -c ws://127.0.0.1:3030/ws
+```
+
+Alternatively, you can use your preferred library to connect to a WebSocket at the address `ws://127.0.0.1:3030/ws`.
+
 ## Tests
 
 As of now, you can run the tests only if you clone the repository (use `./run_tests.sh`). However, since our tests are generic and can be used by any drone, we will probably move them to a separate repository in the near future.
