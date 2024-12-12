@@ -657,6 +657,10 @@ impl RustezeDrone {
     pub fn with_warn(&mut self) {
         self.logger.set_displayable(LogLevel::Warn as u8);
     }
+
+    pub fn with_all(&mut self) {
+        self.logger.set_displayable(LogLevel::All as u8);
+    }
     
     pub fn with_web_socket(&mut self) {
         self.logger.set_web_socket(true);
