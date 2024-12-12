@@ -1,1 +1,55 @@
-# drone
+# Rust-eze drone specifications
+
+This is the repository containing the Drone provided by Rust-eze group for the Advanced Programming course (a.y. 2024/2025).
+
+## Importing the project
+
+Add our crate to your `Cargo.toml` file:
+
+```toml
+rusteze_drone = { git = "https://github.com/Rusteze-AP/drone.git", branch = "main" }
+```
+
+Each group that bought the drone will have access to a telegram group where we communicate updates and changes to the drone (which will require `cargo update`). If you are not part of the group, please contact us.
+
+## Usage
+
+Add to any of your files `*.rs`:
+    
+```rust
+use rusteze_drone::RustezeDrone;
+```
+
+## Logging
+
+The drone **by default** does not log anything. If you want to enable the logging, you can enable only some levels or all of them, **before running it**. To do so, you can use the following functions:
+
+```rust
+use rusteze_drone::RustezeDrone;
+
+fn main() {
+    let drone = RustezeDrone::new(...);
+
+    // Enable which levels you want to log
+    drone.with_all(); // Enable all levels
+    drone.with_debug(); // Enables only debug level
+    drone.with_info(); // Enables only info level
+    drone.with_warn(); // Enables only warn level
+    drone.with_error(); // Enables only error level
+
+    // Forward the drone logs to a websocket
+    drone.with_websocket();
+
+    // Start the drone
+    drone.run();
+}
+```
+
+## Tests
+
+As of now, you can run the tests only if you clone the repository (use `./run_tests.sh`). However, since our tests are generic and can be used by any drone, we will probably move them to a separate repository in the near future.
+
+## Support
+
+- Telegram group (link sent privately)
+- Create an issue on this repository
