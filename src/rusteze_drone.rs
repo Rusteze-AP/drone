@@ -386,6 +386,11 @@ impl RustezeDrone {
 
 /* MAIN PACKETS HANDLER */
 impl RustezeDrone {
+    /// Return the NodeId of the Drone
+    pub fn get_id(&self) -> NodeId {
+        self.id
+    }
+
     fn print_log(&self, message: &Result<(), String>, packet_str: &String) {
         if let Err(err) = message {
             if err.contains("dropped") {
