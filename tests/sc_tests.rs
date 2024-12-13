@@ -1,7 +1,5 @@
-mod generic_fn;
-use generic_fn::sc_generics::*;
-
 use rusteze_drone::RustezeDrone;
+use rusteze_tests::sc_generics::*;
 
 #[test]
 fn send_command() {

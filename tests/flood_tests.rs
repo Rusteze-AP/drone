@@ -1,7 +1,5 @@
-mod generic_fn;
-use generic_fn::flood_generics::*;
-
 use rusteze_drone::RustezeDrone;
+use rusteze_tests::flood_generics::*;
 
 #[test]
 fn new_flood_request() {

@@ -55,7 +55,9 @@ Alternatively, you can use your preferred library to connect to a WebSocket at t
 
 ## Tests
 
-As of now, you can run the tests only if you clone the repository (use `./run_tests.sh`). However, since our tests are generic and can be used by any drone, we will probably move them to a separate repository in the near future.
+Tests can be found in the corresponding repository, available [here](https://github.com/Rusteze-AP/rusteze-tests) and can be imported and used by any group. 
+
+Additionally, you can find them in the `tests` folder of this repository and use them by running `./run_tests.sh`.
 
 ## Support
 
