@@ -27,8 +27,7 @@ pub fn sc_send_packet(sender: &Sender<DroneEvent>, packet: &DroneEvent) -> Resul
     match sender.send(packet.clone()) {
         Ok(()) => Ok(()),
         Err(err) => Err(format!(
-            "Error occurred while sending packet event to SC. Error: {}",
-            err
+            "Error occurred while sending packet event to SC. Error: {err}"
         )),
     }
 }
