@@ -18,7 +18,7 @@ impl RustezeDrone {
     pub(crate) fn send_fragment(
         &self,
         sender: &Sender<Packet>,
-        mut packet: Packet,
+        packet: &mut Packet,
     ) -> Result<(), String> {
         if self.to_drop() {
             packet.routing_header.decrease_hop_index(); // Hop index has been increased before to check the next hop

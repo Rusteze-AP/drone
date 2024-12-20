@@ -195,7 +195,7 @@ impl RustezeDrone {
 
         let sender = sender.unwrap();
 
-        let forward_packet = packet.clone();
+        let mut forward_packet = packet.clone();
         res = match &mut packet.pack_type {
             PacketType::Ack(_) => self.send_ack(&sender, &forward_packet),
             PacketType::Nack(_) => self.send_nack(&sender, &forward_packet),
@@ -211,7 +211,7 @@ impl RustezeDrone {
                         },
                     )
                 } else {
-                    self.send_fragment(&sender, forward_packet)
+                    self.send_fragment(&sender, &mut forward_packet)
                 }
             }
             PacketType::FloodResponse(_) => send_packet(&sender, &packet),
