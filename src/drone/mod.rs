@@ -22,8 +22,8 @@ pub struct RustezeDrone {
     controller_recv: Receiver<DroneCommand>,
     terminated: bool,
 
-    // Flood related
-    flood_history: HashSet<u64>,
+    flood_history: HashSet<(NodeId, u64)>, // (InitiatorId, FloodId)
+
     logger: Logger,
 }
 

@@ -17,11 +17,16 @@ fn new_flood_neighbours() {
 }
 
 #[test]
-fn test_flood_res() {
-    generic_flood_res::<RustezeDrone>();
+fn test_flood_res_forward() {
+    generic_flood_res_forward::<RustezeDrone>();
 }
 
 #[test]
 fn test_known_flood_req() {
     generic_known_flood_req::<RustezeDrone>();
+}
+
+#[test]
+fn test_flood_req_two_initiator() {
+    generic_flood_req_two_initiator::<RustezeDrone>();
 }

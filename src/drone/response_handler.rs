@@ -110,7 +110,7 @@ impl RustezeDrone {
         if let Err(err) = self.send_nack(&sender.unwrap(), &packet) {
             return Err(err);
         }
-        
+
         self.event_dispatcher(&packet, "Nack");
         Ok(())
     }

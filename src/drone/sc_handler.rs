@@ -32,11 +32,7 @@ impl RustezeDrone {
         }
     }
 
-    pub(crate) fn add_sender(
-        &mut self,
-        id: NodeId,
-        sender: &Sender<Packet>,
-    ) -> Result<(), String> {
+    pub(crate) fn add_sender(&mut self, id: NodeId, sender: &Sender<Packet>) -> Result<(), String> {
         let res = self.packet_senders.insert(id, sender.clone());
         if res.is_some() {
             Err(format!(
