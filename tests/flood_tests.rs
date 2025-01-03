@@ -17,8 +17,8 @@ fn new_flood_neighbours() {
 }
 
 #[test]
-fn test_flood_res() {
-    generic_flood_res::<RustezeDrone>();
+fn test_flood_res_forward() {
+    generic_flood_res_forward::<RustezeDrone>();
 }
 
 #[test]
