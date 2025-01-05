@@ -28,6 +28,14 @@ impl RustezeDrone {
                 self.id, node_id
             ))
         } else {
+            self.logger.log_debug(
+                format!(
+                    "[DRONE-{}][REMOVE SENDER] - Sender with id {} removed",
+                    self.id, node_id
+                    
+                )
+                .as_str(),
+            );
             Ok(())
         }
     }
@@ -44,6 +52,13 @@ impl RustezeDrone {
                 self.id, id
             ))
         } else {
+            self.logger.log_debug(
+                format!(
+                    "[DRONE-{}][ADD SENDER] - Sender with id {} added",
+                    self.id, id
+                )
+                .as_str(),
+            );
             Ok(())
         }
     }
