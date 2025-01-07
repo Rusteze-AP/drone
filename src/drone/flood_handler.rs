@@ -74,11 +74,19 @@ impl RustezeDrone {
             let (sender, msg) = Self::build_flood_response(flood_req);
             return self.send_flood_response(sender, &msg);
         }
+
         let mut forward_res = String::new();
+
+        let path_len = flood_req.path_trace.len();
+        let sender_id = if path_len == 1 {
+            flood_req.initiator_id
+        } else {
+            flood_req.path_trace[flood_req.path_trace.len() - 2].0
+        };
+
         // Forward flood req to neighbours
         for (id, sx) in &self.packet_senders {
             // Skip flood req sender
-            let sender_id = flood_req.path_trace[flood_req.path_trace.len() - 2].0;
             if *id == sender_id {
                 continue;
             }
