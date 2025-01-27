@@ -65,14 +65,17 @@ impl RustezeDrone {
 
     pub(crate) fn handle_known_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
         let (sender, msg) = Self::build_flood_response(flood_req);
-        self.send_flood_response(sender, &msg)
+        if let Err(msg) = self.send_flood_response(sender, &msg) {
+            return Err(msg);
+        }
+        self.event_dispatcher(&msg, "Flood response");
+        return Ok(());
     }
 
     pub(crate) fn handle_new_flood_id(&self, flood_req: &FloodRequest) -> Result<(), String> {
         // If drone has no neighbours except the sender of flood req
         if self.packet_senders.len() == 1 {
-            let (sender, msg) = Self::build_flood_response(flood_req);
-            return self.send_flood_response(sender, &msg);
+            return self.handle_known_flood_id(flood_req);
         }
 
         let mut forward_res = String::new();
@@ -106,7 +109,10 @@ impl RustezeDrone {
                     "[DRONE-{}][FLOOD REQUEST] - Error occurred while forwarding flood requests to DRONE {}. \n Error: {}\n",
                     self.id, id, err
                 ));
+                continue;
             }
+
+            self.event_dispatcher(&packet, "Flood request");
         }
         if !forward_res.is_empty() {
             return Err(forward_res);

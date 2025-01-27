@@ -175,12 +175,11 @@ impl RustezeDrone {
             );
             return;
         }
-            if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
-                res = self.handle_flood_req(flood_req);
-                self.print_log(&res, &packet_str);
-                return;
-            }
-
+        if let PacketType::FloodRequest(flood_req) = &mut packet.pack_type {
+            res = self.handle_flood_req(flood_req);
+            self.print_log(&res, &packet_str);
+            return;
+        }
 
         // Check if header is valid
         let sender = self.generic_packet_check(&mut packet);
