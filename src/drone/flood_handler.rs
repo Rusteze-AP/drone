@@ -124,7 +124,10 @@ impl RustezeDrone {
         // Either case add the drone to the path trace
         flood_req.path_trace.push((self.id, NodeType::Drone));
 
-        if !self.flood_history.insert(flood_req.flood_id) {
+        if !self
+            .flood_history
+            .insert((flood_req.initiator_id, flood_req.flood_id))
+        {
             return self.handle_known_flood_id(flood_req);
         }
 

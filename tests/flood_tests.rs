@@ -25,3 +25,8 @@ fn test_flood_res_forward() {
 fn test_known_flood_req() {
     generic_known_flood_req::<RustezeDrone>();
 }
+
+#[test]
+fn test_flood_req_two_initiator() {
+    generic_flood_req_two_initiator::<RustezeDrone>();
+}
