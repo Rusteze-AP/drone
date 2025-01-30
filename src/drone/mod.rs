@@ -79,7 +79,7 @@ impl Drone for RustezeDrone {
             controller_recv,
             terminated: false,
             flood_history: HashSet::new(),
-            logger: Logger::new(LogLevel::None as u8, false, "RustezeDrone".to_string()),
+            logger: Logger::new(LogLevel::All as u8, false, "RustezeDrone".to_string()),
         }
     }
 
